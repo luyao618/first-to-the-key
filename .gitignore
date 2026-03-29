@@ -9,16 +9,15 @@
 Thumbs.db
 Desktop.ini
 
-# === Claude Code Local ===
-.claude/settings.local.json
-.claude/docs/UPGRADE-PLAN.md
+# === Claude Code ===
+.claude/
+CLAUDE.md
 CLAUDE.local.md
 production/session-logs/
 production/session-state/*.md
 
-# === Internal Planning (not for public) ===
-docs/IMPROVEMENTS-PROPOSAL.md
-docs/MULTI-STAGE-DOCUMENT-WORKFLOW.md
+# === Docs (engine reference, workflow guides, etc.) ===
+docs/
 
 # === Build Output ===
 build/
