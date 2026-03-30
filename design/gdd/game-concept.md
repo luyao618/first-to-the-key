@@ -344,11 +344,44 @@ Learn the rules in under ten minutes. Start glimpsing the strategic depth after 
 
 ---
 
+## Design Clarifications
+
+*Resolved 2026-03-30 during design review.*
+
+### 1. Movement Model: Real-Time with Tick
+
+Agent 按固定 tick 间隔移动（每 tick 移动一格）。LLM 需要在 tick 时间内返回移动决策，否则 Agent 原地等待。这保持了紧张的竞赛节奏，同时 tick 间隔是可调参数。
+
+- **不是回合制**：两个 Agent 独立运行，不需要等对方决策完成
+- **Tick 间隔**：待原型测试确定（建议起始值 0.5-1.0 秒）
+
+### 2. Key Progression: Independent Progress, Shared Positions
+
+- 两个玩家各有独立的钥匙进度（Brass → Jade → Crystal）
+- **钥匙位置共享**：同一把钥匙对双方来说在同一个位置
+- A 拿走钥匙后，钥匙仍然存在于该位置，B 仍然可以在同一位置拾取
+- 可以理解为：钥匙是"检查点"，而非"消耗品"
+
+### 3. Mid-Match Messaging: Deferred to Core Tier
+
+- MVP 仅支持赛前 prompt 输入
+- 比赛中途发消息给 Agent 的功能（含冻结惩罚）延后到 Core 阶段
+- MVP 专注验证核心假设："赛前 prompt 能否让 LLM 有效导航迷宫"
+
+### 4. Treasure Chest Visibility: Follows Fog-of-War Rules
+
+- **宝箱遵循迷雾规则，没有特殊待遇**
+- 观察员（God View 的人类玩家）：可以看到宝箱出现的位置
+- 探索员（Agent / 迷雾中的玩家）：宝箱只有进入视野范围后才可见，不会因为出现就强制暴露
+- 这意味着先拿到水晶钥匙触发宝箱的一方不一定有优势——除非宝箱恰好在其视野内
+
+---
+
 ## Next Steps
 
-- [ ] Configure Godot 4.6 engine (`/setup-engine godot 4.6`)
-- [ ] Validate concept completeness (`/design-review design/gdd/game-concept.md`)
-- [ ] Decompose concept into systems (`/map-systems`)
+- [x] Configure Godot 4.6 engine (`/setup-engine godot 4.6`)
+- [x] Validate concept completeness (`/design-review design/gdd/game-concept.md`)
+- [x] Decompose concept into systems (`/map-systems`)
 - [ ] Create architecture decision: LLM information format (`/architecture-decision`)
 - [ ] Prototype core loop: maze generation + agent navigation (`/prototype maze-agent`)
 - [ ] Validate LLM maze navigation capability (the core hypothesis)
