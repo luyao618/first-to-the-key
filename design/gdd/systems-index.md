@@ -21,7 +21,7 @@ First to the Key 是一个 2D 俯视角迷宫竞速游戏，核心机制围绕 L
 | # | System Name | Category | Priority | Status | Design Doc | Depends On |
 |---|-------------|----------|----------|--------|------------|------------|
 | 1 | Maze Data Model | Core | MVP | Approved | [maze-data-model.md](maze-data-model.md) | — |
-| 2 | Match State Manager | Core | MVP | Not Started | — | — |
+| 2 | Match State Manager | Core | MVP | Approved | [match-state-manager.md](match-state-manager.md) | — |
 | 3 | Scene Manager | Core | MVP | Not Started | — | — |
 | 4 | Maze Generator | Gameplay | MVP | Not Started | — | Maze Data Model |
 | 5 | Grid Movement | Gameplay | MVP | Not Started | — | Maze Data Model |
@@ -139,9 +139,9 @@ None found. All dependencies are unidirectional.
 | Metric | Count |
 |--------|-------|
 | Total systems identified | 15 |
-| Design docs started | 1 |
-| Design docs reviewed | 1 |
-| Design docs approved | 1 |
+| Design docs started | 2 |
+| Design docs reviewed | 2 |
+| Design docs approved | 2 |
 | MVP systems designed | 0/14 |
 | Core systems designed | 0/1 |
 
