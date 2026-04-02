@@ -1,6 +1,6 @@
 # Prompt Input
 
-> **Status**: Draft
+> **Status**: Approved
 > **Author**: design-system agent
 > **Last Updated**: 2026-04-02
 > **System Index**: #12
