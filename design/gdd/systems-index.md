@@ -28,7 +28,7 @@ First to the Key 是一个 2D 俯视角迷宫竞速游戏，核心机制围绕 L
 | 6 | Fog of War / Vision | Gameplay | MVP | Approved | [fog-of-war.md](fog-of-war.md) | Maze Data Model |
 | 7 | Key Collection | Gameplay | MVP | Approved | [key-collection.md](key-collection.md) | Maze Data Model, Grid Movement, Fog of War |
 | 8 | LLM Information Format | AI | MVP | Approved | [llm-information-format.md](llm-information-format.md) | Maze Data Model, Fog of War, Grid Movement, Key Collection, Match State Manager |
-| 9 | LLM Agent Integration | AI | MVP | Not Started | — | LLM Information Format, Grid Movement, Match State Manager |
+| 9 | LLM Agent Integration | AI | MVP | Approved | [llm-agent-integration.md](llm-agent-integration.md) | LLM Information Format, Grid Movement, Match State Manager, Maze Data Model, Fog of War, Key Collection |
 | 10 | Win Condition / Chest | Gameplay | MVP | Not Started | — | Key Collection, Maze Data Model, Match State Manager |
 | 11 | Match Renderer | UI | MVP | Not Started | — | Maze Data Model, Grid Movement, Fog of War, Key Collection |
 | 12 | Prompt Input | UI | MVP | Not Started | — | Match State Manager, Scene Manager |
@@ -139,10 +139,10 @@ None found. All dependencies are unidirectional.
 | Metric | Count |
 |--------|-------|
 | Total systems identified | 15 |
-| Design docs started | 8 |
-| Design docs reviewed | 8 |
-| Design docs approved | 8 |
-| MVP systems designed | 8/14 |
+| Design docs started | 9 |
+| Design docs reviewed | 9 |
+| Design docs approved | 9 |
+| MVP systems designed | 9/14 |
 | Core systems designed | 0/1 |
 
 ---
