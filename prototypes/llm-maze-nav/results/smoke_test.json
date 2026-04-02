@@ -1,0 +1,80 @@
+[
+  {
+    "experiment": "smoke_random",
+    "model": "RANDOM",
+    "maze_size": "7x7",
+    "vision_radius": 3,
+    "max_ticks": 100,
+    "num_trials": 1,
+    "prompt": "(random agent)",
+    "completion_rate": 0.0,
+    "avg_ticks": 100.0,
+    "avg_moves": 100.0,
+    "avg_wall_bumps": 0.0,
+    "avg_idle_ticks": 0.0,
+    "avg_keys_collected": 0.0,
+    "avg_explore_rate": 0.14285714285714285,
+    "avg_efficiency": 0.0,
+    "trials": [
+      {
+        "completed": false,
+        "ticks_used": 100,
+        "total_moves": 100,
+        "wall_bumps": 0,
+        "idle_ticks": 0,
+        "keys_collected": 0,
+        "key_ticks": {},
+        "chest_tick": null,
+        "cells_explored": 7,
+        "total_cells": 49,
+        "explore_rate": 0.14285714285714285,
+        "api_calls": 0,
+        "api_errors": 0,
+        "avg_response_time": 0.0,
+        "wall_time_seconds": 0.0020830631256103516,
+        "optimal_steps": 49,
+        "efficiency": 0.0
+      }
+    ],
+    "timestamp": "2026-04-02T17:00:42.120252"
+  },
+  {
+    "experiment": "smoke_llm",
+    "model": "qwen2.5:14b",
+    "maze_size": "7x7",
+    "vision_radius": 3,
+    "max_ticks": 100,
+    "num_trials": 1,
+    "prompt": "Explore unvisited directions. Avoid backtracking.",
+    "completion_rate": 0.0,
+    "avg_ticks": 100.0,
+    "avg_moves": 100.0,
+    "avg_wall_bumps": 0.0,
+    "avg_idle_ticks": 0.0,
+    "avg_keys_collected": 0.0,
+    "avg_explore_rate": 0.08163265306122448,
+    "avg_efficiency": 0.0,
+    "trials": [
+      {
+        "completed": false,
+        "ticks_used": 100,
+        "total_moves": 100,
+        "wall_bumps": 0,
+        "idle_ticks": 0,
+        "keys_collected": 0,
+        "key_ticks": {},
+        "chest_tick": null,
+        "cells_explored": 4,
+        "total_cells": 49,
+        "explore_rate": 0.08163265306122448,
+        "api_calls": 100,
+        "api_errors": 0,
+        "avg_response_time": 4.393598754405975,
+        "wall_time_seconds": 439.37579011917114,
+        "optimal_steps": 49,
+        "efficiency": 0.0
+      }
+    ],
+    "timestamp": "2026-04-02T17:08:01.497121"
+  }
+]
