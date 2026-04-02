@@ -1,6 +1,6 @@
 # Scene Manager
 
-> **Status**: Designed
+> **Status**: Approved
 > **Author**: design-system agent
 > **Last Updated**: 2026-04-01
 > **System Index**: #3
