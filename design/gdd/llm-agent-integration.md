@@ -26,7 +26,7 @@ LLM Agent Integration 是连接 LLM API 与游戏运行时的**决策引擎**。
 ### Core Rules
 
 1. LLM Agent Integration 为每个 Agent 维护一个独立的 **AgentBrain**，包含：路径队列（path_queue）、API 请求状态（in-flight / idle）、LLM 会话配置（API endpoint, key, model）
-2. 每个 tick，系统对每个 AgentBrain 执行以下逻辑（按优先级）：
+2. 每个 tick，系统对每个 AgentBrain 执行以下逻辑（按优先级）。本系统的 `on_tick()` 在 Tick Phase Model 的 **Phase 1（Decision）** 中执行——先于 Grid Movement 的 Phase 2（Movement），保证本 tick 写入的方向在同一 tick 内被消费，不存在 1-tick 延迟：
    - 若有 API 响应刚到达 → 解析目标坐标，从当前位置 A* 寻路生成新 path_queue，替换旧队列
    - 若 path_queue 非空 → 消费队头方向，调用 `GridMovement.set_direction()`
    - 若 path_queue 为空且当前位置是直道 → 自动前进（不消耗 API）
@@ -48,7 +48,7 @@ LLM Agent Integration 是连接 LLM API 与游戏运行时的**决策引擎**。
 | 死胡同 | 可通行方向 = 1（只有来路） | 走廊尽头 |
 | 新目标可见 | 视野内出现了之前不可见的钥匙或宝箱 | 走着走着看到了钥匙 |
 
-**"新目标可见"检测机制**：LLM Agent Manager 监听 Key Collection 的 `key_activated(key_type)` 信号和 `chest_unlocked(agent_id)` 信号。收到信号后，检查新目标的位置是否在该 Agent 当前 visible cells 中（调用 `FoW.get_cell_visibility(agent_id, x, y) == VISIBLE`）。若在视野内，视为决策点触发，预发起 API 请求。若不在视野内，不触发——Agent 继续当前路径，直到移动导致新目标进入视野或到达其他决策点时自然触发。此外，每次 `mover_moved` 后更新视野时，系统比较更新前后的 visible cells 中的标记差异：若新增了当前目标钥匙或宝箱的可见性（之前不在任何 visible cell 中，现在出现在某个 visible cell 中），同样视为决策点触发。
+**"新目标可见"检测机制**：LLM Agent Manager 监听 Key Collection 的 `key_activated(key_type)` 信号和 `chest_unlocked(agent_id)` 信号。收到信号后，检查新目标的位置是否在该 Agent 当前 visible cells 中（调用 `FoW.get_cell_visibility(agent_id, x, y) == VISIBLE`）。若在视野内，视为决策点触发，预发起 API 请求。若不在视野内，不触发——Agent 继续当前路径，直到移动导致新目标进入视野或到达其他决策点时自然触发。此外，每次 `mover_moved` 后，系统需要检查视野更新后是否有新目标出现在 visible cells 中。**该检测使用 `call_deferred` 延迟到当前帧末尾执行**，确保 FoW 的 `update_vision()` 已经处理完毕、visible cells 已更新为最新状态。这避免了 Phase 3 内部 LLM Agent 和 FoW 的信号处理顺序不确定问题。
 | 撞墙 | path_queue 头部方向不可通行 | LLM 给的路径有误 |
 
 **非决策点（直道）**：除来路方向外，可通行方向 = 1。系统自动沿唯一方向前进。
@@ -388,7 +388,7 @@ avg_queue_length = total_queue_steps / total_api_calls
 
 | Item | Owner | Deadline | Description |
 |------|-------|----------|-------------|
-| ~~更新 LLM Information Format GDD~~ | ~~Game Designer~~ | ~~Sprint 1~~ | ~~同步修改 System Message Template 的 OUTPUT FORMAT 部分，从 `{"direction": "..."}` 改为 `{"target": [x, y]}`，保持 direction 作为降级选项。同步更新 `parse_response()` 返回类型和 Response Parsing 伪代码~~ **Resolved 2026-04-03**: LLM Information Format GDD 已更新——System Message OUTPUT FORMAT 改为 target 优先 + direction 降级，parse_response() 返回 ParseResult 三态（TARGET/DIRECTION/NONE） |
+| ~~更新 LLM Information Format GDD~~ | ~~Game Designer~~ | ~~Sprint 1~~ | ~~同步修改 System Message Template 的 OUTPUT FORMAT 部分，从 `{"direction": "..."}` 改为 `{"target": [x, y]}`，保持 direction 作为降级选项。同步更新 `parse_response()` 返回类型和 Response Parsing 伪代码~~ **Resolved 2026-04-03**: LLM Information Format GDD 已更新——System Message OUTPUT FORMAT 改为 target 优先 + direction 降级，parse_response() 返回 ParsedResponse 三态（TARGET/DIRECTION/NONE） |
 
 ## Open Questions
 

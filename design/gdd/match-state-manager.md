@@ -125,7 +125,10 @@ MatchStateManager:
 | **Prompt Input** | Prompt Input -> Manager | `start_setup()`, 写入 `config.prompt_a/b` | UI 收集 prompt 后填入配置，配置完成后触发 countdown |
 | **Maze Generator** | Manager -> Generator（通过信号） | `state_changed` 信号 | Setup 阶段，Generator 监听信号开始生成迷宫 |
 | **LLM Agent Integration** | Agent -> Manager | 监听 `tick` 信号 | 每个 tick，Agent 系统读取信号执行一次 LLM 决策 + 移动 |
-| **Grid Movement** | Movement -> Manager | 监听 `tick` 信号，查询 `is_playing()` | 仅在 Playing 状态下处理移动请求 |
+| **Grid Movement** | Movement -> Manager | 監听 `tick` 信号，查询 `is_playing()` | 仅在 Playing 状态下处理移动请求 |
+
+**`tick` 信号处理顺序约束**：LLM Agent Integration 必须在 Grid Movement 之前处理 `tick` 信号——Agent 先写入 `pending_direction`（Phase 1 Decision），Grid Movement 再读取并执行移动（Phase 2 Movement）。实现方式：确保 LLM Agent Integration 的 `connect("tick", ...)` 调用先于 Grid Movement 的 `connect("tick", ...)`（Godot 信号按连接顺序同步分派），或改用两个分离信号（`tick_decision` → `tick_execute`）。详见 Grid Movement GDD 的 Tick Phase Model。
+
 | **Fog of War** | FoW -> Manager（通过信号） | `state_changed` 信号 | COUNTDOWN 阶段，FoW 监听信号调用 `initialize(maze, agent_ids)` 创建 VisionMap 并刷新初始视野。`initialize()` 从 MazeData 读取 spawn 位置，并从 MatchConfig 读取 `vision_strategy`。Rematch 时相同流程（重新 initialize 即可） |
 | **Win Condition** | WinCon -> Manager | `finish_match(result, winner_id)` | 检测到胜利条件后调用，触发比赛结束 |
 | **Match HUD** | HUD -> Manager | 监听 `tick` 信号，查询 `get_tick_count()` / `get_elapsed_time()` | 显示比赛时间和 tick 数 |

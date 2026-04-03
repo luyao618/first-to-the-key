@@ -143,7 +143,8 @@ Agent 视角下，每个 cell 的状态机：
 | System | Direction | Interface | Data Flow |
 |--------|-----------|-----------|-----------|
 | **Maze Data Model** | FoW → Model | `get_neighbors(x, y)`, `has_wall(x, y, dir)` | 视野计算时沿可通行路径 BFS 扩展，需查询墙壁和邻居 |
-| **Grid Movement** | Movement → FoW | `update_vision(agent_id, new_position)` | Agent 每次移动后，Movement 系统通知 FoW 重算该 Agent 的视野 |
+| **Grid Movement** | Movement → FoW（初始化） | `update_vision(agent_id, position)` 直接调用 | Grid Movement 的 `initialize()` 完成 Mover 就位后，为每个 Mover 调用一次，触发初始视野计算 |
+| **Grid Movement** | FoW ← Movement（运行时） | FoW 监听 `mover_moved(mover_id, old_pos, new_pos)` 信号 | FoW 自行监听 `mover_moved`，在 handler 中调用内部 `update_vision(agent_id, new_pos)` 重算视野。Grid Movement 运行时不主动调用 FoW |
 | **LLM Information Format** | LLMFormat → FoW | `get_cell_visibility(agent_id, x, y)`, `get_visible_cells(agent_id)`, `get_explored_cells(agent_id)` | LLM 格式化器根据可见性决定向 LLM 发送哪些 cell 的信息 |
 | **Match Renderer** | Renderer → FoW | `get_cell_visibility(agent_id, x, y)` | Renderer 根据可见性状态决定每个 cell 的渲染方式（隐藏/半透明/完全显示） |
 | **Key Collection** | 无直接依赖 | — | FoW 不查询 Key Collection 的状态。Marker 激活状态过滤由消费方（LLM Information Format / Match Renderer）自行调用 `KeyCollection.is_key_active()` 完成。见 Core Rules 第 7 条 |
@@ -255,13 +256,13 @@ coverage = known_count / total_cells
 | System | Direction | Nature of Dependency |
 |--------|-----------|---------------------|
 | **Maze Data Model** | FoW depends on this | 视野 BFS 需要查询 `get_neighbors()` 和 `has_wall()` 来沿可通行路径扩展。没有 MazeData 就无法计算视野 |
-| **Grid Movement** | Movement → FoW（通知方向） | Movement 系统在 Agent 移动后调用 `update_vision()` 触发视野重算。FoW 不主动监听移动，只被动接收通知。依赖方向：Grid Movement 调用 FoW 接口，FoW 不依赖 Movement |
+| **Grid Movement** | FoW depends on this（信号 + 初始化） | **运行时**：FoW 监听 Grid Movement 的 `mover_moved` 信号，在 handler 中调用 `update_vision()` 重算视野。**初始化时**：FoW 的 `initialize()` 从 MazeData 读取 spawn 位置并自行调用 `update_vision()` 刷新初始视野。依赖方向：FoW 依赖 Grid Movement 的 `mover_moved` 信号驱动运行时视野更新 |
 | **LLM Information Format** | LLMFormat depends on FoW | 格式化器查询 `get_visible_cells()` 和 `get_explored_cells()` 来决定向 LLM 发送哪些 cell 信息。FoW 提供可见性数据，LLMFormat 决定如何序列化。**Marker 激活状态过滤由 LLMFormat 自行完成**（查询 KeyCollection / WinCondition），FoW 不参与 |
 | **Match Renderer** | Renderer depends on FoW | Renderer 查询 `get_cell_visibility()` 决定每个 cell 的渲染方式：Unknown = 隐藏/黑色，Explored = 半透明/灰色，Visible = 完全显示。**Marker 激活状态过滤由 Renderer 自行完成**（查询 KeyCollection / WinCondition），FoW 不参与 |
-| **Key Collection** | 无直接依赖 | FoW 不查询 Key Collection 的任何接口。之前文档中描述的 "FoW 查询 `is_key_active()`" 是错误的——marker 激活过滤是消费方（LLMFormat / Renderer）的职责，不是 FoW 的职责 |
-| **Win Condition / Chest** | 无直接依赖 | FoW 不查询 Win Condition 的任何接口。之前文档中描述的 "FoW 查询 `is_chest_active()`" 是错误的——宝箱激活过滤是消费方的职责 |
-| **Match State Manager** | MSM triggers FoW | MSM 在 COUNTDOWN 阶段通知 FoW 调用 `initialize(maze, agent_ids)`（新比赛和 rematch 均走此路径）。外部系统不直接调用 `reset_all()`——`initialize()` 内部处理所有重置逻辑 |
-| **(依赖总结)** | — | **运行时视野计算**仅依赖 Maze Data Model（`get_neighbors()`, `has_wall()`）。**初始化配置**依赖 Match State Manager 的 MatchConfig（读取 `vision_strategy`）。FoW 不依赖 Grid Movement、Key Collection、Win Condition 或任何 Feature 层系统的内部状态 |
+| **Key Collection** | 无直接依赖 | FoW 不查询 Key Collection 的任何接口——marker 激活过滤是消费方（LLMFormat / Renderer）的职责，不是 FoW 的职责 |
+| **Win Condition / Chest** | 无直接依赖 | FoW 不查询 Win Condition 的任何接口——宝箱激活过滤是消费方的职责 |
+| **Match State Manager** | MSM triggers FoW | MSM 在 COUNTDOWN 阶段通知 FoW 调用 `initialize(maze, agent_ids)`（新比赛和 rematch 均走此路径）。FoW 从 MatchConfig 读取 `vision_strategy` |
+| **(上游依赖总结)** | — | FoW 依赖 Maze Data Model（BFS 查询）、Grid Movement（`mover_moved` 信号驱动运行时视野更新）、Match State Manager（MatchConfig 的 `vision_strategy`）。FoW 不依赖 Key Collection、Win Condition 或任何 Feature 层系统的内部状态 |
 
 ## Tuning Knobs
 

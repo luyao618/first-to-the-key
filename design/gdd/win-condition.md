@@ -56,10 +56,16 @@ Win Condition / Chest 是判定比赛胜负的终局系统。当任意一方 Age
 15. 如果同一 tick 内两个 Agent 都满足条件：调用 `finish_match(DRAW, -1)`，判定平局
 16. 实现方式：不在每个 `mover_moved` 信号中立即调用 `finish_match()`，而是在 tick 结束时统一判定。监听 Match State Manager 的 `tick` 信号的**末尾**（或使用 `call_deferred`）进行批量处理
 
+**Phase 3 内部顺序约束**
+
+17. Win Condition 与 Key Collection 都在 Tick Phase Model 的 Phase 3（Reaction）中监听 `mover_moved` 信号。虽然 Phase 3 的监听者通常无顺序依赖（见 Grid Movement GDD Tick Phase Model），但存在一个间接依赖：Key Collection 的 `chest_unlocked` 信号可能在同一 Phase 3 中触发 Win Condition 激活宝箱和标记 Agent 资格。如果 Win Condition 的 `mover_moved` handler 在 Key Collection 之前执行，宝箱可能尚未 Active / Agent 尚未 Eligible，导致本 tick 错过判定
+18. 该风险已被 `pending_openers` + `call_deferred` 批量判定机制消除：Win Condition 不在 `mover_moved` handler 中立即调用 `finish_match()`，而是在当前帧末尾（`call_deferred`）统一判定。此时 Phase 3 的所有信号处理（包括 Key Collection 的 `chest_unlocked` → Win Condition 的资格更新）均已完成。因此 Phase 3 内部不需要强制连接顺序
+19. 此外，Maze Generator 保证 Crystal Key 和 Chest 位于不同 cell（`is_valid()` 验证 6 个标记位置互不重复），因此"同一次 `mover_moved` 同时触发 Crystal 拾取和宝箱开启"在结构上不可能发生——Agent 拾取 Crystal 后至少需要一次额外移动才能到达 Chest
+
 **生命周期**
 
-17. Win Condition 监听 Match State Manager 的 `state_changed` 信号：COUNTDOWN 时初始化，PLAYING 时启用判定，FINISHED 后停止处理
-18. `initialize(maze)` 时从 MazeData 读取 `CHEST` marker 位置并缓存
+20. Win Condition 监听 Match State Manager 的 `state_changed` 信号：COUNTDOWN 时初始化，PLAYING 时启用判定，FINISHED 后停止处理
+21. `initialize(maze)` 时从 MazeData 读取 `CHEST` marker 位置并缓存
 
 ### Data Structures
 
@@ -304,4 +310,4 @@ Win Condition 是一个纯规则判定系统，自身几乎没有可调参数—
 | OQ-1 | 宝箱开启动画与 `finish_match()` 的时序 | Medium | **Resolved 2026-04-03**: `finish_match()` 立即调用，Renderer 在 FINISHED 状态下播放终局动画序列（宝箱开启 + 胜利者高亮）。逻辑层不等渲染层——与 Grid Movement 的设计一致 |
 | OQ-2 | Key Collection 的 OQ-2 现已解决：宝箱位置由 Maze Generator 预设在 MazeData 中，`chest_unlocked` 信号不需要携带位置。Win Condition 的 `initialize()` 从 MazeData 读取 | — | Resolved |
 | OQ-3 | 是否需要记录"宝箱在第几 tick 被激活"和"在第几 tick 被开启"供 Result Screen 展示？可以为观战增加数据维度 | Low | 推迟到 Result Screen 设计时决定 |
-| OQ-4 | 信号连接顺序：Key Collection 和 Win Condition 都监听 `mover_moved`。需要确保 Key Collection 先处理（触发 `chest_unlocked`），Win Condition 后处理（读取已更新的状态）。Godot 的信号连接顺序取决于 `connect()` 调用顺序——是否需要显式指定优先级？ | Medium | 推迟到实现阶段决定。备选方案：Win Condition 不直接监听 `mover_moved`，而是在 `chest_unlocked` handler 中检查该 Agent 当前位置是否为宝箱 cell |
+| OQ-4 | 信号连接顺序：Key Collection 和 Win Condition 都监听 `mover_moved`。需要确保 Key Collection 先处理（触发 `chest_unlocked`），Win Condition 后处理（读取已更新的状态）。Godot 的信号连接顺序取决于 `connect()` 调用顺序——是否需要显式指定优先级？ | Medium | Resolved — `pending_openers` + `call_deferred` 批量判定机制使得 Phase 3 内部不需要强制连接顺序。Win Condition 的最终判定延迟到帧末尾执行，此时所有 `mover_moved` 和 `chest_unlocked` 处理均已完成。详见 Core Rule #17-19 和 Grid Movement GDD Tick Phase Model |

@@ -24,8 +24,8 @@ First to the Key 是一个 2D 俯视角迷宫竞速游戏，核心机制围绕 L
 | 2 | Match State Manager | Core | MVP | Approved | [match-state-manager.md](match-state-manager.md) | — |
 | 3 | Scene Manager | Core | MVP | Approved | [scene-manager.md](scene-manager.md) | — |
 | 4 | Maze Generator | Gameplay | MVP | Approved | [maze-generator.md](maze-generator.md) | Maze Data Model |
-| 5 | Grid Movement | Gameplay | MVP | Approved | [grid-movement.md](grid-movement.md) | Maze Data Model, Match State Manager |
-| 6 | Fog of War / Vision | Gameplay | MVP | Approved | [fog-of-war.md](fog-of-war.md) | Maze Data Model, Match State Manager (config) |
+| 5 | Grid Movement | Gameplay | MVP | Approved | [grid-movement.md](grid-movement.md) | Maze Data Model, Match State Manager, Fog of War (initialize only) |
+| 6 | Fog of War / Vision | Gameplay | MVP | Approved | [fog-of-war.md](fog-of-war.md) | Maze Data Model, Match State Manager (config), Grid Movement (mover_moved signal) |
 | 7 | Key Collection | Gameplay | MVP | Approved | [key-collection.md](key-collection.md) | Maze Data Model, Grid Movement, Match State Manager |
 | 8 | LLM Information Format | AI | MVP | Approved | [llm-information-format.md](llm-information-format.md) | Maze Data Model, Fog of War, Grid Movement, Key Collection, Win Condition, Match State Manager |
 | 9 | LLM Agent Integration | AI | MVP | Approved | [llm-agent-integration.md](llm-agent-integration.md) | LLM Information Format, Grid Movement, Match State Manager, Maze Data Model, Fog of War, Key Collection |
@@ -71,8 +71,8 @@ First to the Key 是一个 2D 俯视角迷宫竞速游戏，核心机制围绕 L
 ### Core Layer (depends on Foundation)
 
 4. **Maze Generator** — depends on: Maze Data Model
-5. **Grid Movement** — depends on: Maze Data Model, Match State Manager
-6. **Fog of War / Vision** — depends on: Maze Data Model, Match State Manager (reads MatchConfig.vision_strategy)
+5. **Grid Movement** — depends on: Maze Data Model, Match State Manager, Fog of War (initialize only)
+6. **Fog of War / Vision** — depends on: Maze Data Model, Match State Manager (reads MatchConfig.vision_strategy), Grid Movement (mover_moved signal)
 
 ### Feature Layer (depends on Core)
 
@@ -119,7 +119,12 @@ First to the Key 是一个 2D 俯视角迷宫竞速游戏，核心机制围绕 L
 
 ## Circular Dependencies
 
-None found. All dependencies are unidirectional.
+Grid Movement and Fog of War have a **mutual dependency**, but it is **not circular at runtime**:
+
+- **Grid Movement → FoW**: `initialize()` directly calls `FoW.update_vision()` to set initial vision (one-time, during COUNTDOWN phase)
+- **FoW → Grid Movement**: FoW listens to `mover_moved` signal to trigger `update_vision()` (runtime, during PLAYING phase)
+
+These two paths operate in different lifecycle phases and never create a call cycle within a single frame. The initialize path runs once before any tick; the signal path runs during ticks. Design order is unaffected: Grid Movement can be designed before FoW (the FoW call in `initialize()` is a forward reference to a known interface). No other circular dependencies exist.
 
 ---
 
