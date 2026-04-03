@@ -2,7 +2,7 @@
 
 > **Status**: Approved
 > **Author**: design-system agent
-> **Last Updated**: 2026-04-01
+> **Last Updated**: 2026-04-03
 > **System Index**: #7
 > **Layer**: Feature
 > **Implements Pillar**: Simple Rules Deep Play, Information Trade-off
@@ -132,7 +132,7 @@ NEED_BRASS → NEED_JADE → NEED_CRYSTAL → KEYS_COMPLETE
 |--------|-----------|-----------|-----------|
 | **Grid Movement** | Movement → Keys | 监听 `mover_moved` 信号 | 每次 Agent 移动后检查新位置是否可拾取钥匙 |
 | **Maze Data Model** | Keys → Model | `get_marker_position(key_type)`, `get_markers_at(x, y)` | 查询钥匙位置，判断 Agent 所在 cell 是否有钥匙 |
-| **Fog of War** | FoW → Keys | `is_key_active(key_type)` | FoW 需要知道哪些钥匙是 Active 的，才能决定是否向 Agent 暴露 marker 信息 |
+| **Fog of War** | 无直接交互 | — | FoW 不查询 Key Collection。Marker 激活过滤由 LLM Information Format 和 Match Renderer 直接查询 `is_key_active()` 完成 |
 | **Win Condition / Chest** | Keys → WinCon | `chest_unlocked(agent_id)` 信号 | 某 Agent 集齐三把钥匙后通知宝箱出现 |
 | **Match Renderer** | Renderer → Keys | `is_key_active(key_type)`, `get_agent_progress(agent_id)` | 渲染钥匙图标（仅 Active 的钥匙），渲染 Agent 的钥匙进度 |
 | **Match HUD** | HUD → Keys | `get_agent_progress(agent_id)` | 显示双方钥匙拾取进度（如 3 格进度条） |
@@ -202,7 +202,7 @@ global_phase =
 | **Maze Data Model** | Key Collection depends on this | 查询 `get_marker_position(KEY_BRASS/KEY_JADE/KEY_CRYSTAL)` 获取钥匙位置，查询 `get_markers_at(x, y)` 判断 Agent 所在 cell 是否有钥匙 marker |
 | **Grid Movement** | Key Collection depends on this | 监听 `mover_moved(mover_id, old_pos, new_pos)` 信号触发拾取判定 |
 | **Match State Manager** | Key Collection depends on this | 监听 `state_changed` 信号管理生命周期——COUNTDOWN 时 `initialize(maze)` 读取钥匙位置并初始化状态，PLAYING 时启用拾取判定，FINISHED 时停止处理 |
-| **Fog of War / Vision** | FoW depends on this | FoW 查询 `is_key_active(key_type)` 判断是否向 Agent 暴露钥匙 marker 信息。Inactive 的钥匙不应出现在 Agent 的可见信息中 |
+| **Fog of War / Vision** | 无直接依赖 | FoW 不查询 Key Collection 的状态。之前描述的 "FoW 查询 `is_key_active()`" 已修正——marker 激活过滤由消费方（LLM Information Format / Match Renderer）直接查询 `is_key_active()` 完成，FoW 仅管理 cell 可见性三态 |
 | **Win Condition / Chest** | WinCon depends on this | 监听 `chest_unlocked(agent_id)` 信号（某 Agent 集齐三把钥匙时发出），触发宝箱出现逻辑 |
 | **Match Renderer** | Renderer depends on this | 查询 `is_key_active(key_type)` 决定是否渲染钥匙图标，查询 `get_agent_progress(agent_id)` 渲染 Agent 的钥匙收集状态 |
 | **Match HUD** | HUD depends on this | 查询 `get_agent_progress(agent_id)` 显示双方钥匙拾取进度（如 3 格进度条） |
