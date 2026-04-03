@@ -2,7 +2,7 @@
 
 > **Status**: Approved
 > **Created**: 2026-03-30
-> **Last Updated**: 2026-04-02
+> **Last Updated**: 2026-04-03
 > **Source Concept**: design/gdd/game-concept.md
 
 ---
@@ -25,12 +25,12 @@ First to the Key 是一个 2D 俯视角迷宫竞速游戏，核心机制围绕 L
 | 3 | Scene Manager | Core | MVP | Approved | [scene-manager.md](scene-manager.md) | — |
 | 4 | Maze Generator | Gameplay | MVP | Approved | [maze-generator.md](maze-generator.md) | Maze Data Model |
 | 5 | Grid Movement | Gameplay | MVP | Approved | [grid-movement.md](grid-movement.md) | Maze Data Model, Match State Manager |
-| 6 | Fog of War / Vision | Gameplay | MVP | Approved | [fog-of-war.md](fog-of-war.md) | Maze Data Model |
-| 7 | Key Collection | Gameplay | MVP | Approved | [key-collection.md](key-collection.md) | Maze Data Model, Grid Movement, Fog of War |
-| 8 | LLM Information Format | AI | MVP | Approved | [llm-information-format.md](llm-information-format.md) | Maze Data Model, Fog of War, Grid Movement, Key Collection, Match State Manager |
+| 6 | Fog of War / Vision | Gameplay | MVP | Approved | [fog-of-war.md](fog-of-war.md) | Maze Data Model, Match State Manager (config) |
+| 7 | Key Collection | Gameplay | MVP | Approved | [key-collection.md](key-collection.md) | Maze Data Model, Grid Movement, Match State Manager |
+| 8 | LLM Information Format | AI | MVP | Approved | [llm-information-format.md](llm-information-format.md) | Maze Data Model, Fog of War, Grid Movement, Key Collection, Win Condition, Match State Manager |
 | 9 | LLM Agent Integration | AI | MVP | Approved | [llm-agent-integration.md](llm-agent-integration.md) | LLM Information Format, Grid Movement, Match State Manager, Maze Data Model, Fog of War, Key Collection |
 | 10 | Win Condition / Chest | Gameplay | MVP | Approved | [win-condition.md](win-condition.md) | Key Collection, Maze Data Model, Match State Manager |
-| 11 | Match Renderer | UI | MVP | Approved | [match-renderer.md](match-renderer.md) | Maze Data Model, Grid Movement, Fog of War, Key Collection |
+| 11 | Match Renderer | UI | MVP | Approved | [match-renderer.md](match-renderer.md) | Maze Data Model, Grid Movement, Fog of War, Key Collection, Win Condition, Match State Manager |
 | 12 | Prompt Input | UI | MVP | Approved | [prompt-input.md](prompt-input.md) | Match State Manager, Scene Manager |
 | 13 | Match HUD | UI | MVP | Approved | [match-hud.md](match-hud.md) | Key Collection, Match State Manager |
 | 14 | Result Screen | UI | MVP | Approved | [result-screen.md](result-screen.md) | Win Condition, Match State Manager, Scene Manager |
@@ -72,18 +72,18 @@ First to the Key 是一个 2D 俯视角迷宫竞速游戏，核心机制围绕 L
 
 4. **Maze Generator** — depends on: Maze Data Model
 5. **Grid Movement** — depends on: Maze Data Model, Match State Manager
-6. **Fog of War / Vision** — depends on: Maze Data Model
+6. **Fog of War / Vision** — depends on: Maze Data Model, Match State Manager (reads MatchConfig.vision_strategy)
 
 ### Feature Layer (depends on Core)
 
-7. **Key Collection** — depends on: Maze Data Model, Grid Movement, Fog of War
-8. **LLM Information Format** — depends on: Maze Data Model, Fog of War
+7. **Key Collection** — depends on: Maze Data Model, Grid Movement, Match State Manager
+8. **LLM Information Format** — depends on: Maze Data Model, Fog of War, Grid Movement, Key Collection, Win Condition, Match State Manager
 9. **LLM Agent Integration** — depends on: LLM Information Format, Grid Movement, Match State Manager
 10. **Win Condition / Chest** — depends on: Key Collection, Maze Data Model, Match State Manager
 
 ### Presentation Layer (depends on Features)
 
-11. **Match Renderer** — depends on: Maze Data Model, Grid Movement, Fog of War, Key Collection
+11. **Match Renderer** — depends on: Maze Data Model, Grid Movement, Fog of War, Key Collection, Win Condition, Match State Manager
 12. **Prompt Input** — depends on: Match State Manager, Scene Manager
 13. **Match HUD** — depends on: Key Collection, Match State Manager
 14. **Result Screen** — depends on: Win Condition, Match State Manager, Scene Manager

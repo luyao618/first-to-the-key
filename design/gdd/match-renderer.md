@@ -2,7 +2,7 @@
 
 > **Status**: Approved
 > **Author**: design-system agent
-> **Last Updated**: 2026-04-02
+> **Last Updated**: 2026-04-03
 > **System Index**: #11
 > **Layer**: Presentation
 > **Implements Pillar**: Simple Rules Deep Play, Information Trade-off
@@ -46,9 +46,10 @@ Match Renderer 是将比赛状态可视化的 Presentation 层系统。它从 Ma
 **标记物渲染（Layer 1）**
 
 9. 每个标记物（钥匙/宝箱）是一个独立的 Sprite 节点，挂载在 Marker Layer 容器下
-10. 标记物的可见性由对应系统的状态决定：
+10. 标记物的可见性由对应系统的激活状态决定（**Renderer 自行查询，不通过 FoW**）：
     - 钥匙：`KeyCollection.is_key_active(key_type)` 为 true 时可见
     - 宝箱：`WinCondition.is_chest_active()` 为 true 时可见
+    - 注意：FoW 不负责 marker 激活状态过滤——FoW 只管理 cell 三态可见性。Renderer 在 God View 模式下直接查询 KeyCollection / WinCondition 判断标记物是否渲染。未来 Agent View 模式下需额外叠加 FoW 可见性判断
 11. 标记物位置固定（从 MazeData marker 位置转换为像素坐标），不移动
 12. Active 标记物播放轻微上下浮动的循环动画（Tween 或 AnimationPlayer）
 
@@ -71,8 +72,8 @@ Match Renderer 是将比赛状态可视化的 Presentation 层系统。它从 Ma
 21. Match Renderer 监听 Match State Manager 的 `state_changed` 信号管理生命周期：
     - SETUP → COUNTDOWN：`initialize(maze)` 构建 TileMap，放置 Marker Sprites，放置 Agent Sprites 到 Spawn 点，设置摄像机
     - COUNTDOWN → PLAYING：显示倒计时动画（3-2-1-GO），倒计时结束后动画消失
-    - PLAYING：持续响应移动/拾取/激活/开启事件播放对应动画
-    - PLAYING → FINISHED：播放胜利/平局动画（宝箱开启 + 胜利者高亮 + 失败者灰显）
+    - PLAYING：持续响应移动/拾取/激活事件播放对应动画（Agent 移动、钥匙激活/拾取、宝箱激活）
+    - PLAYING → FINISHED：播放终局动画序列（宝箱开启 + 胜利者高亮 + 失败者灰显）
 
 ### Data Structures
 
@@ -135,7 +136,7 @@ Match Renderer 自身没有独立状态机——它的行为完全由 Match Stat
 |-------------|-------------------|
 | **SETUP** | 无渲染。等待 `state_changed` 信号 |
 | **COUNTDOWN** | `initialize(maze)` 构建完整渲染场景。显示倒计时动画（3-2-1-GO）。Agent 和标记物可见但静止 |
-| **PLAYING** | 活跃渲染：响应 `mover_moved`/`mover_blocked` 播放 Agent 动画，响应 `key_activated`/`key_collected` 播放钥匙动画，响应 `chest_activated`/`chest_opened` 播放宝箱动画 |
+| **PLAYING** | 活跃渲染：响应 `mover_moved`/`mover_blocked` 播放 Agent 动画，响应 `key_activated`/`key_collected` 播放钥匙动画，响应 `chest_activated` 播放宝箱出现动画。注意：`chest_opened` 动画在 FINISHED 状态下播放（见下方终局动画） |
 | **FINISHED** | 播放终局动画。胜利者 Agent 高亮放大，失败者灰显半透明。宝箱开启动画（如果是正常胜利）或 "TIME UP" 文字（如果是超时平局）。之后保持静态画面直到 `reset()` |
 
 **标记物渲染状态**
@@ -267,9 +268,9 @@ y_offset = sin(time * 2π / float_anim_period) * float_anim_amplitude
 |--------|-----------|---------------------|
 | **Maze Data Model** | Match Renderer depends on this | `initialize()` 时遍历所有 cell 调用 `has_wall(x, y, dir)` 构建 TileMap，调用 `get_marker_position()` 获取标记物像素位置。运行时不再查询（迷宫结构不可变） |
 | **Grid Movement** | Match Renderer depends on this | 监听 `mover_moved(mover_id, old_pos, new_pos)` 播放移动补间动画，监听 `mover_blocked(mover_id, pos, dir)` 播放撞墙抖动，监听 `mover_stayed(mover_id, pos)` 确认无动画。查询 `get_position(mover_id)` 用于初始定位 |
-| **Fog of War / Vision** | Match Renderer depends on this | MVP 不使用（God View 不经过 FoW）。未来 Agent View 模式下查询 `get_cell_visibility(agent_id, x, y)` 决定 cell 渲染方式（Unknown = 黑色遮挡，Explored = 半透明灰色，Visible = 完全显示） |
-| **Key Collection** | Match Renderer depends on this | 监听 `key_activated(key_type)` 触发钥匙出现动画，监听 `key_collected(agent_id, key_type)` 触发拾取动画。查询 `is_key_active(key_type)` 用于初始化时判断哪些钥匙可见，查询 `get_agent_progress(agent_id)` 判断钥匙半透明状态 |
-| **Win Condition / Chest** | Match Renderer depends on this | 监听 `chest_activated` 触发宝箱出现动画（淡入 + 光柱），监听 `chest_opened(agent_id)` 触发开启动画（盖弹开 + 金蛋）。查询 `is_chest_active()` 用于初始化时判断宝箱是否可见 |
+| **Fog of War / Vision** | Match Renderer depends on this | MVP 不使用（God View 不经过 FoW）。未来 Agent View 模式下查询 `get_cell_visibility(agent_id, x, y)` 决定 cell 渲染方式（Unknown = 黑色遮挡，Explored = 半透明灰色，Visible = 完全显示）。**注意**：FoW 不负责 marker 激活过滤——标记物可见性由 Renderer 直接查询 KeyCollection / WinCondition 判断 |
+| **Key Collection** | Match Renderer depends on this | 监听 `key_activated(key_type)` 触发钥匙出现动画，监听 `key_collected(agent_id, key_type)` 触发拾取动画。查询 `is_key_active(key_type)` 用于初始化时判断哪些钥匙可见和运行时过滤 Inactive 钥匙（**此过滤由 Renderer 执行，FoW 不参与**），查询 `get_agent_progress(agent_id)` 判断钥匙半透明状态 |
+| **Win Condition / Chest** | Match Renderer depends on this | 监听 `chest_activated` 触发宝箱出现动画（淡入 + 光柱），监听 `chest_opened(agent_id)` 触发开启动画（盖弹开 + 金蛋）。查询 `is_chest_active()` 用于初始化时判断宝箱是否可见和运行时过滤 Inactive 宝箱（**此过滤由 Renderer 执行，FoW 不参与**） |
 | **Match State Manager** | Match Renderer depends on this | 监听 `state_changed(old, new)` 驱动渲染生命周期（COUNTDOWN 初始化、PLAYING 活跃渲染、FINISHED 终局动画），监听 `match_finished(result)` 决定胜利/平局动画类型。读取 `tick_interval` 配置计算 `move_anim_duration` |
 | **(无下游依赖)** | — | Match Renderer 是数据流终端，不发出信号，不被任何其他系统依赖 |
 
@@ -408,7 +409,7 @@ Match Renderer 本身不直接管理音效播放（建议由独立的 AudioManag
 | # | Question | Impact | Status |
 |---|----------|--------|--------|
 | OQ-1 | TileMap tile 设计：是用 16 种独立 tile 图片还是用 Godot TileMap 的 terrain/autotile 功能自动匹配墙壁？Autotile 更灵活但配置复杂；独立 tile 简单直接但美术资源量更大 | Medium | 推迟到实现阶段决定。MVP 建议先用 16 种独立 tile，后续可迁移到 autotile |
-| OQ-2 | 宝箱开启动画与 `finish_match()` 的时序（来自 Win Condition OQ-1）：Renderer 是在 `chest_opened` 信号后播放动画再等 `finish_match`，还是 `finish_match` 已经触发了 FINISHED 状态后在 FINISHED 状态下播放？后者更简单——Renderer 在收到 `match_finished` 时检查 result，如果是 WIN 则播放宝箱开启 + 胜利动画序列 | Medium | 建议采用后者：`finish_match` 立即触发，Renderer 在 FINISHED 状态下播放终局动画序列。这样逻辑层不需要等渲染 |
+| OQ-2 | 宝箱开启动画与 `finish_match()` 的时序（来自 Win Condition OQ-1） | Medium | **Resolved 2026-04-03**: `finish_match()` 立即触发，Renderer 在 FINISHED 状态下播放终局动画序列（宝箱开启 + 胜利者高亮）。逻辑层不等渲染层——与 Grid Movement 的"逻辑即时更新，渲染异步追赶"设计一致 |
 | OQ-3 | Agent View 渲染模式的架构预留：是用同一 TileMap 加 FoW 遮罩覆盖层，还是使用 Godot 的 SubViewport 做分屏？SubViewport 更干净但性能开销更大 | Low | 推迟到 Core 阶段（Player vs Player 模式）设计时决定 |
 | OQ-4 | 是否需要"Agent 路径轨迹"可视化？在 God View 下用淡色线条显示每个 Agent 的历史移动路径，帮助观战者分析 prompt 效果 | Low | 推迟到 Full 阶段。MVP 不显示路径轨迹，但 Grid Movement 的 `visited_cells` 数据已可用 |
 | OQ-5 | Grid Movement 的 OQ-2 现在可以回答：移动动画与逻辑解耦——逻辑层立即更新坐标，渲染层异步播放补间动画追赶逻辑位置 | — | Resolved |
