@@ -2,14 +2,14 @@
 
 > **Status**: Approved
 > **Author**: design-system agent
-> **Last Updated**: 2026-04-02
+> **Last Updated**: 2026-04-03
 > **System Index**: #9
 > **Layer**: Feature
 > **Implements Pillar**: Human-AI Symbiosis, Simple Rules Deep Play
 
 ## Overview
 
-LLM Agent Integration 是连接 LLM API 与游戏运行时的**决策引擎**。它为每个 Agent 维护一个独立的决策循环：在需要决策时（岔路口、死胡同、队列耗尽、新目标出现），向 LLM API 发送由 LLM Information Format 构建的 prompt，接收 LLM 返回的目标坐标，通过 Maze Data Model 的 A* 寻路生成路径队列（path queue），每个 tick 从队列中消费一步交给 Grid Movement 执行。
+LLM Agent Integration 是连接 LLM API 与游戏运行时的**决策引擎**。它为每个 Agent 维护一个独立的决策循环：在需要决策时（岔路口、死胡同、队列耗尽、新目标出现），向 LLM API 发送由 LLM Information Format 构建的 prompt，接收 LLM 返回的响应并通过 `parse_response()` 解析为 `ParseResult`（目标坐标优先，单步方向降级，解析失败为 NONE）。目标坐标通过 Maze Data Model 的 A* 寻路生成路径队列（path queue），每个 tick 从队列中消费一步交给 Grid Movement 执行。
 
 本系统的关键设计决策是**路径队列 + 智能触发**模式：LLM 不需要每个 tick 都做决策，而是返回一个目标坐标，系统自动规划路径并连续执行。Agent 在直道上自动前进（不消耗 API 调用），只在到达决策点时才请求新的 LLM 决策。新的 API 请求在到达决策点时**预发起**，Agent 继续沿旧路径行进，API 响应到达后用新路径替换旧队列——这确保 Agent 全程保持移动，几乎不会因为 API 延迟而停顿。
 
@@ -111,8 +111,11 @@ get_auto_direction(pos: Vector2i, last_dir: MoveDirection) -> MoveDirection:
 ├─────────────────────────────────────────────────────────┤
 │  收到响应                                                │
 │  1. 解析 HTTP 响应，提取 LLM 文本内容                      │
-│  2. 调用 LLMInfoFormat.parse_response(text) 获取目标坐标   │
-│  3. 从当前位置 A* 寻路到目标，生成 path_queue               │
+│  2. 调用 LLMInfoFormat.parse_response(text)               │
+│     → 返回 ParseResult: TARGET(pos) / DIRECTION(dir) / NONE │
+│  3. TARGET: 从当前位置 A* 寻路到 pos，生成 path_queue       │
+│     DIRECTION: 生成长度为 1 的 path_queue                   │
+│     NONE: 不更新 path_queue                                │
 │  4. 标记 brain.request_state = IDLE                      │
 ├─────────────────────────────────────────────────────────┤
 │  超时 / 错误                                             │
@@ -208,7 +211,7 @@ LLMAgentManager:
 | **Grid Movement** | Movement → Agent | `mover_moved` 信号 | 移动成功后更新 `last_move_direction`，检查是否为决策点 |
 | **Grid Movement** | Movement → Agent | `mover_blocked` 信号 | 撞墙 → 清空 path_queue，发起新 API 请求 |
 | **Maze Data Model** | Agent → Model | `get_shortest_path()`, `can_move()` | A* 寻路和决策点判断（通过遍历 4 方向 `can_move()` 获取可通行方向列表） |
-| **Fog of War** | Agent → FoW | `get_cell_visibility()`, `get_visible_cells()` | 验证目标坐标在已知区域内；检查新目标是否出现在视野中 |
+| **Fog of War** | Agent → FoW | `get_cell_visibility(agent_id, x, y)`, `get_visible_cells(agent_id)` | 验证目标坐标在已知区域内；检查新目标是否出现在视野中 |
 | **Key Collection** | Keys → Agent | `key_collected` 信号 | 收集钥匙后，下一个目标变更 → 可能触发新 API 请求 |
 | **Match HUD** | HUD → Agent | `get_api_call_count()`, `get_idle_tick_count()` | 显示 API 调用统计 |
 | **Result Screen** | Result → Agent | `get_api_call_count()`, `total_tokens_used` | 赛后统计展示 |
@@ -383,9 +386,9 @@ avg_queue_length = total_queue_steps / total_api_calls
 
 ## Action Items
 
-| Item | Owner | Deadline | Description | Status |
-|------|-------|----------|-------------|--------|
-| 更新 LLM Information Format GDD | Game Designer | Sprint 1 | 同步修改 System Message Template 的 OUTPUT FORMAT 部分，从 `{"direction": "..."}` 改为 `{"target": [x, y]}`，保持 direction 作为降级选项。同步更新 `parse_response()` 返回类型和 Response Parsing 伪代码 | **Done** — LLM Information Format GDD 已同步更新：Core Rule #3/#6、System Message OUTPUT FORMAT、Response Parsing（ParsedResponse union type）、Acceptance Criteria |
+| Item | Owner | Deadline | Description |
+|------|-------|----------|-------------|
+| ~~更新 LLM Information Format GDD~~ | ~~Game Designer~~ | ~~Sprint 1~~ | ~~同步修改 System Message Template 的 OUTPUT FORMAT 部分，从 `{"direction": "..."}` 改为 `{"target": [x, y]}`，保持 direction 作为降级选项。同步更新 `parse_response()` 返回类型和 Response Parsing 伪代码~~ **Resolved 2026-04-03**: LLM Information Format GDD 已更新——System Message OUTPUT FORMAT 改为 target 优先 + direction 降级，parse_response() 返回 ParsedResponse 三态（TARGET/DIRECTION/NONE） |
 
 ## Open Questions
 

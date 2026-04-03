@@ -2,20 +2,20 @@
 
 > **Status**: Approved
 > **Author**: design-system agent
-> **Last Updated**: 2026-03-31
+> **Last Updated**: 2026-04-03
 > **System Index**: #2
 > **Layer**: Foundation
 > **Implements Pillar**: Simple Rules Deep Play, Fair Racing
 
 ## Overview
 
-Match State Manager 是驱动比赛生命周期的状态机系统。它管理一场比赛从配置到结束的全部阶段流转：玩家在赛前输入 prompt -> 迷宫生成 -> 比赛正式开始（tick 计时、Agent 行动）-> 某方达成胜利条件 -> 比赛结束并展示结果。该系统本身不执行迷宫生成、不移动 Agent、不判定钥匙拾取 -- 它仅维护"当前比赛处于哪个阶段"这一核心状态，并通过信号（signals）通知其他系统发生了阶段切换。作为 Foundation 层组件，它为 LLM Agent Integration 提供 tick 驱动、为 Prompt Input 和 Result Screen 提供阶段入口/出口、为 Win Condition 提供比赛结束的触发通道。MVP 阶段仅支持 Agent vs Agent 模式，但状态机设计应预留扩展到 Player vs Agent 和 Player vs Player 模式的能力。
+Match State Manager 是驱动比赛生命周期的状态机系统。它管理一场比赛从配置到结束的全部阶段流转：进入 SETUP 阶段后迷宫生成，玩家在 God View 下查看迷宫并输入 prompt -> 比赛正式开始（tick 计时、Agent 行动）-> 某方达成胜利条件 -> 比赛结束并展示结果。该系统本身不执行迷宫生成、不移动 Agent、不判定钥匙拾取 -- 它仅维护"当前比赛处于哪个阶段"这一核心状态，并通过信号（signals）通知其他系统发生了阶段切换。作为 Foundation 层组件，它为 LLM Agent Integration 提供 tick 驱动、为 Prompt Input 和 Result Screen 提供阶段入口/出口、为 Win Condition 提供比赛结束的触发通道。MVP 阶段仅支持 Agent vs Agent 模式，但状态机设计应预留扩展到 Player vs Agent 和 Player vs Player 模式的能力。
 
 ## Player Fantasy
 
 Match State Manager 和 Maze Data Model 类似，是一个"幕后"系统，玩家不会直接感知它的存在。但它塑造了比赛的节奏和仪式感：
 
-**赛前准备的期待感**：当你写好 prompt 点击"开始"，倒计时的出现告诉你"比赛即将开始" -- 这个从准备到开赛的切换，就是状态机在工作。它创造了一个仪式化的"起跑线"瞬间。
+**赛前准备的期待感**：迷宫生成完毕，你看着整张地图，思考该怎么指导你的 AI——写好 prompt 点击"开始"，倒计时的出现告诉你"比赛即将开始" -- 这个从准备到开赛的切换，就是状态机在工作。它创造了一个仪式化的"起跑线"瞬间。
 
 **比赛中的紧张感**：Tick 计时器持续推进，你的 Agent 每秒都在做决策。Match State Manager 驱动着这个心跳般的节奏，让观战不是被动等待，而是一场有节奏的竞赛。
 
@@ -46,6 +46,14 @@ MatchConfig:
   prompt_b: String                 # 玩家 B 的 prompt（Agent 模式）
   maze_width: int                  # 迷宫宽度（传递给 Maze Generator）
   maze_height: int                 # 迷宫高度
+  vision_strategy: VisionStrategy  # 视野策略（传递给 Fog of War）— 由 game_mode 自动决定，不由玩家配置
+
+# game_mode → vision_strategy 映射规则（在 start_setup() 中自动设置）：
+#   AGENT_VS_AGENT     → PATH_REACH      (LLM Agent 使用路径可达感知)
+#   PLAYER_VS_AGENT    → LINE_OF_SIGHT   (人类玩家使用视线)
+#   PLAYER_VS_PLAYER   → LINE_OF_SIGHT   (人类玩家使用视线)
+# VisionStrategy 是共享枚举类型，定义在此处（MatchConfig 层），FoW 引用
+enum VisionStrategy { PATH_REACH, LINE_OF_SIGHT }
 
 MatchStateManager:
   current_state: MatchState        # 当前状态
@@ -117,9 +125,11 @@ MatchStateManager:
 | **Prompt Input** | Prompt Input -> Manager | `start_setup()`, 写入 `config.prompt_a/b` | UI 收集 prompt 后填入配置，配置完成后触发 countdown |
 | **Maze Generator** | Manager -> Generator（通过信号） | `state_changed` 信号 | Setup 阶段，Generator 监听信号开始生成迷宫 |
 | **LLM Agent Integration** | Agent -> Manager | 监听 `tick` 信号 | 每个 tick，Agent 系统读取信号执行一次 LLM 决策 + 移动 |
-| **Grid Movement** | Movement -> Manager | 监听 `tick` 信号，查询 `is_playing()` | 仅在 Playing 状态下处理移动请求 |
+| **Grid Movement** | Movement -> Manager | 監听 `tick` 信号，查询 `is_playing()` | 仅在 Playing 状态下处理移动请求 |
 
 **`tick` 信号处理顺序约束**：LLM Agent Integration 必须在 Grid Movement 之前处理 `tick` 信号——Agent 先写入 `pending_direction`（Phase 1 Decision），Grid Movement 再读取并执行移动（Phase 2 Movement）。实现方式：确保 LLM Agent Integration 的 `connect("tick", ...)` 调用先于 Grid Movement 的 `connect("tick", ...)`（Godot 信号按连接顺序同步分派），或改用两个分离信号（`tick_decision` → `tick_execute`）。详见 Grid Movement GDD 的 Tick Phase Model。
+
+| **Fog of War** | FoW -> Manager（通过信号） | `state_changed` 信号 | COUNTDOWN 阶段，FoW 监听信号调用 `initialize(maze, agent_ids)` 创建 VisionMap 并刷新初始视野。`initialize()` 从 MazeData 读取 spawn 位置，并从 MatchConfig 读取 `vision_strategy`。Rematch 时相同流程（重新 initialize 即可） |
 | **Win Condition** | WinCon -> Manager | `finish_match(result, winner_id)` | 检测到胜利条件后调用，触发比赛结束 |
 | **Match HUD** | HUD -> Manager | 监听 `tick` 信号，查询 `get_tick_count()` / `get_elapsed_time()` | 显示比赛时间和 tick 数 |
 | **Result Screen** | Result -> Manager | 监听 `match_finished` 信号，查询 `get_config()` | 展示比赛结果、双方 prompt、比赛时长 |
@@ -189,6 +199,7 @@ countdown_remaining = countdown_duration - (current_time - countdown_start_time)
 | **Maze Generator** | Generator depends on this | 监听 `state_changed` 信号，在 Setup 阶段启动迷宫生成 |
 | **LLM Agent Integration** | Agent depends on this | 监听 `tick` 信号驱动 LLM 决策循环，查询 `is_playing()` |
 | **Grid Movement** | Movement depends on this | 监听 `tick` 信号，仅在 Playing 状态处理移动 |
+| **Fog of War** | FoW depends on this | 监听 `state_changed` 信号，在 COUNTDOWN 阶段调用 `initialize(maze, agent_ids)` 创建 VisionMap、刷新初始视野（从 MazeData 读取 spawn 位置）、读取 `MatchConfig.vision_strategy` 选择视野算法 |
 | **Win Condition / Chest** | WinCon depends on this | 调用 `finish_match()` 触发比赛结束 |
 | **Match HUD** | HUD depends on this | 监听 `tick` 信号更新时间显示，查询 `get_elapsed_time()` |
 | **Result Screen** | Result depends on this | 监听 `match_finished` 信号，读取 `result` / `winner_id` / `config` 展示结果 |
