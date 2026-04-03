@@ -382,7 +382,7 @@ Agent 按固定 tick 间隔移动（每 tick 移动一格）。LLM 需要在 tic
 - [x] Configure Godot 4.6 engine (`/setup-engine godot 4.6`)
 - [x] Validate concept completeness (`/design-review design/gdd/game-concept.md`)
 - [x] Decompose concept into systems (`/map-systems`)
+- [x] Prototype core loop: maze generation + agent navigation (`/prototype maze-agent`) — Concluded
+- [x] Validate LLM maze navigation capability (the core hypothesis) — 已验证，LLM 探索率 45% vs 随机 25%
 - [ ] Create architecture decision: LLM information format (`/architecture-decision`)
-- [ ] Prototype core loop: maze generation + agent navigation (`/prototype maze-agent`)
-- [ ] Validate LLM maze navigation capability (the core hypothesis)
 - [ ] Plan first sprint (`/sprint-plan new`)
