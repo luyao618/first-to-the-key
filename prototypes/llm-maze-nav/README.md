@@ -62,7 +62,7 @@ python3 maze.py
 
 ## Results
 
-**Status**: In progress — Round 1 complete, further optimization needed.
+**Status**: Concluded — 核心假设已验证，进入 Godot 实现阶段后在实际游戏中继续迭代。
 
 **Date**: 2026-04-02
 **Model**: qwen2.5:14b (14.8B, Q4_K_M) via Ollama local
@@ -121,10 +121,19 @@ This improved exploration from 4 cells/100 ticks to 21 cells/20 ticks.
 4. **Local 14B models are playable but slow** — 10s/tick means a match would take ~30-100 minutes. Cloud APIs (GPT-4o, Claude) would be ~1-2s/tick, matching the GDD's 0.5-1.0s tick_interval target
 5. **Information format enhancements are critical** — the `[NEW]`/`[visited]` direction annotations and action feedback were essential for basic functionality. These should be incorporated into the LLM Information Format GDD
 
-### Next Steps
+### Conclusion
 
-- [ ] Run with higher tick budget (200+) to see if LLM can complete the full key→chest loop
-- [ ] Test with ASCII map enabled (`include_ascii_map=True`) — may help spatial reasoning
-- [ ] Test with a larger model (magidonia-24b) to see if model size improves exploration plateau
-- [ ] Add "unexplored region hint" to state message (e.g., "27 cells unexplored, mostly SOUTH and EAST")
-- [ ] Test with cloud API (faster response, stronger model) for realistic gameplay speed validation
+原型验证于 2026-04-03 标记为 Concluded。Round 1 的数据已足以支持进入实现阶段：
+
+1. **核心假设成立**：LLM 能从文本描述中理解迷宫结构并做出优于随机的导航决策（探索率 45% vs 25%）
+2. **信息格式增强已验证**：`[NEW]/[visited]` 标注和 action feedback 是 LLM 正常工作的必要条件，已纳入 GDD
+3. **剩余假设（H2 信息格式对比、H3 prompt 质量差异）延迟到 Godot 实现后用实际游戏验证**——在真实游戏环境中测试比在独立原型中更有价值
+4. **已知原型代码问题**（方向解析子串匹配误判、最优路径计算偏差 1 步、ASCII map 开关未贯通）不修复——原型代码不进入生产，Godot 实现将从零重写
+
+### Deferred Items（移交给 Godot 实现阶段）
+
+- 更高 tick 预算下的完整钥匙→宝箱流程验证
+- ASCII map vs 坐标列表格式对比（H2）
+- 不同 prompt 策略的表现差异（H3）
+- Cloud API 速度下的实际游戏节奏验证
+- 更大/更强模型的探索效果

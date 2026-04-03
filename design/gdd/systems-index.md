@@ -149,8 +149,9 @@ None found. All dependencies are unidirectional.
 
 ## Next Steps
 
-- [ ] Design MVP-tier systems in order (use `/design-system [system-name]`)
-- [ ] Start with #1: Maze Data Model (Foundation, highest dependency count)
-- [ ] Prototype LLM Information Format early — this validates the core hypothesis
-- [ ] Run `/design-review` on each completed GDD
+- [x] Design MVP-tier systems in order (use `/design-system [system-name]`) — 14/14 MVP 系统 GDD 已全部 Approved
+- [x] Start with #1: Maze Data Model (Foundation, highest dependency count)
+- [x] Prototype LLM Information Format early — this validates the core hypothesis（原型已 Concluded，核心假设已验证）
+- [x] Run `/design-review` on each completed GDD — 14 个 GDD 已全部 review 通过
 - [ ] Run `/gate-check pre-production` when MVP systems are designed
+- [ ] 进入 Godot 实现阶段：按 Foundation → Core → Feature → Presentation 层次实现 14 个 MVP 系统
