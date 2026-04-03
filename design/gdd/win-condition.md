@@ -2,7 +2,7 @@
 
 > **Status**: Approved
 > **Author**: design-system agent
-> **Last Updated**: 2026-04-02
+> **Last Updated**: 2026-04-03
 > **System Index**: #10
 > **Layer**: Feature
 > **Implements Pillar**: Simple Rules Deep Play, Fair Racing
@@ -93,8 +93,10 @@ WinConditionManager:
 **设计决策**：
 
 - **`pending_openers` 缓冲区**：`mover_moved` 处理中不立即调用 `finish_match()`，而是将满足条件的 agent_id 加入缓冲区，tick 结束时统一判定。解决同 tick 平局问题
-- **`chest_opened` 信号**：在调用 `finish_match()` 之前发出，给 Renderer / Audio 一个窗口播放宝箱开启动画。`finish_match()` 会触发状态切换到 FINISHED，此后 Renderer 可能进入结果展示模式
+- **`chest_opened` 信号**：在调用 `finish_match()` 之前发出，供统计/日志使用。注意：宝箱开启**动画**不在此信号窗口内播放——`finish_match()` 紧随其后立即调用，Renderer 在 FINISHED 状态下播放终局动画序列（宝箱开启 + 胜利者高亮）。逻辑层不等渲染层
 - **不持有 Match State Manager 引用**：通过信号监听 `state_changed` 和 `tick`，通过直接调用 `finish_match()` 结束比赛（单向依赖）
+
+> **时序决策（Resolved）**：`finish_match()` 立即调用，不等待宝箱开启动画。Renderer 在 FINISHED 状态下播放终局动画序列。这保证逻辑层与渲染层解耦——与 Grid Movement 的"逻辑即时更新，渲染异步追赶"设计一致。
 
 ### States and Transitions
 
@@ -144,7 +146,7 @@ INELIGIBLE → ELIGIBLE
 | **Match State Manager** | WinCon → MSM | 调用 `finish_match(result, winner_id)` | 胜利或平局判定后调用，触发比赛结束 |
 | **Match State Manager** | MSM → WinCon | 监听 `state_changed` 信号、`tick` 信号 | `state_changed`：COUNTDOWN 时初始化，PLAYING 时启用判定，FINISHED 后停止。`tick`：tick 结束时批量处理 `pending_openers` |
 | **Maze Data Model** | WinCon → Model | `get_marker_position(CHEST)` | `initialize()` 时读取宝箱位置并缓存 |
-| **Fog of War / Vision** | FoW → WinCon | `is_chest_active()` | FoW 查询宝箱是否 Active，决定是否向 Agent 暴露 CHEST marker 信息。Inactive 的宝箱不应出现在 Agent 视野中 |
+| **Fog of War / Vision** | 无直接交互 | — | FoW 不查询 Win Condition。宝箱激活过滤由 LLM Information Format 和 Match Renderer 直接查询 `is_chest_active()` 完成 |
 | **Match Renderer** | Renderer → WinCon | `is_chest_active()`, `get_chest_position()` | 渲染宝箱图标（仅 Active 时）。监听 `chest_activated` 触发出现动画，监听 `chest_opened` 触发开启动画 |
 | **Match HUD** | HUD → WinCon | `is_chest_active()` | 宝箱 Active 后可在 HUD 显示"宝箱已出现"提示 |
 | **LLM Information Format** | LLMFormat → WinCon | `is_chest_active()`, `get_chest_position()` | 宝箱 Active 且在 Agent 视野内时，将宝箱位置序列化给 LLM |
@@ -205,7 +207,7 @@ resolve_pending() =
 | **Grid Movement** | Win Condition depends on this | 监听 `mover_moved(mover_id, old_pos, new_pos)` 信号：每次 Agent 移动后检查是否满足宝箱开启条件 |
 | **Match State Manager** | Win Condition depends on this | 监听 `state_changed` 信号管理生命周期——COUNTDOWN 时 `initialize(maze)` 读取宝箱位置，PLAYING 时启用判定，FINISHED 时停止处理。监听 `tick` 信号在 tick 结束时批量处理 `pending_openers`。调用 `finish_match(result, winner_id)` 结束比赛 |
 | **Maze Data Model** | Win Condition depends on this | `initialize()` 时调用 `get_marker_position(CHEST)` 读取宝箱位置并缓存 |
-| **Fog of War / Vision** | FoW depends on this | FoW 查询 `is_chest_active()` 判断是否向 Agent 暴露 CHEST marker 信息。Inactive 的宝箱不应出现在 Agent 可见信息中 |
+| **Fog of War / Vision** | 无直接依赖 | FoW 不查询 Win Condition 的状态。之前描述的 "FoW 查询 `is_chest_active()`" 已修正——宝箱激活过滤由消费方（LLM Information Format / Match Renderer）直接查询 `is_chest_active()` 完成，FoW 仅管理 cell 可见性三态 |
 | **Match Renderer** | Renderer depends on this | 查询 `is_chest_active()` 决定是否渲染宝箱图标。监听 `chest_activated` 播放出现动画，监听 `chest_opened` 播放开启动画 |
 | **Match HUD** | HUD depends on this | 查询 `is_chest_active()` 显示"宝箱已出现"状态提示 |
 | **LLM Information Format** | LLMFormat depends on this | 查询 `is_chest_active()` 和 `get_chest_position()` 将宝箱状态序列化给 LLM（仅 Active 且在视野内时） |
@@ -250,7 +252,7 @@ Win Condition 是一个纯规则判定系统，自身几乎没有可调参数—
 
 - 宝箱开启动画是比赛中最有戏剧性的时刻——视觉和音效应该比钥匙拾取更有仪式感
 - 金蛋不需要独立的渲染逻辑或数据模型，它是宝箱开启动画的嵌入元素
-- 动画播放窗口：`chest_opened` 信号 → 动画播放 → 动画完成后调用 `finish_match()`。或者 `finish_match()` 立即调用但 Renderer 在 FINISHED 状态下播放开启动画。具体实现由 Match Renderer 决定
+- **时序契约**：`chest_opened` 信号发出后 `finish_match()` 立即调用。宝箱开启动画由 Match Renderer 在 FINISHED 状态下播放——逻辑层不等渲染层。这与 Grid Movement 的设计一致（逻辑即时更新，渲染异步追赶）
 
 ## Acceptance Criteria
 
@@ -299,7 +301,7 @@ Win Condition 是一个纯规则判定系统，自身几乎没有可调参数—
 
 | # | Question | Impact | Status |
 |---|----------|--------|--------|
-| OQ-1 | 宝箱开启动画与 `finish_match()` 的时序：是先播放动画再调用 `finish_match()`（延迟结束），还是立即调用 `finish_match()` 让 Renderer 在 FINISHED 状态下播放动画？前者更有仪式感但需要延迟机制，后者实现更简单 | Medium | 推迟到 Match Renderer 设计时决定 |
+| OQ-1 | 宝箱开启动画与 `finish_match()` 的时序 | Medium | **Resolved 2026-04-03**: `finish_match()` 立即调用，Renderer 在 FINISHED 状态下播放终局动画序列（宝箱开启 + 胜利者高亮）。逻辑层不等渲染层——与 Grid Movement 的设计一致 |
 | OQ-2 | Key Collection 的 OQ-2 现已解决：宝箱位置由 Maze Generator 预设在 MazeData 中，`chest_unlocked` 信号不需要携带位置。Win Condition 的 `initialize()` 从 MazeData 读取 | — | Resolved |
 | OQ-3 | 是否需要记录"宝箱在第几 tick 被激活"和"在第几 tick 被开启"供 Result Screen 展示？可以为观战增加数据维度 | Low | 推迟到 Result Screen 设计时决定 |
 | OQ-4 | 信号连接顺序：Key Collection 和 Win Condition 都监听 `mover_moved`。需要确保 Key Collection 先处理（触发 `chest_unlocked`），Win Condition 后处理（读取已更新的状态）。Godot 的信号连接顺序取决于 `connect()` 调用顺序——是否需要显式指定优先级？ | Medium | 推迟到实现阶段决定。备选方案：Win Condition 不直接监听 `mover_moved`，而是在 `chest_unlocked` handler 中检查该 Agent 当前位置是否为宝箱 cell |

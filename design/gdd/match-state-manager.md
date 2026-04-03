@@ -2,7 +2,7 @@
 
 > **Status**: Approved
 > **Author**: design-system agent
-> **Last Updated**: 2026-03-31
+> **Last Updated**: 2026-04-03
 > **System Index**: #2
 > **Layer**: Foundation
 > **Implements Pillar**: Simple Rules Deep Play, Fair Racing
@@ -46,6 +46,14 @@ MatchConfig:
   prompt_b: String                 # 玩家 B 的 prompt（Agent 模式）
   maze_width: int                  # 迷宫宽度（传递给 Maze Generator）
   maze_height: int                 # 迷宫高度
+  vision_strategy: VisionStrategy  # 视野策略（传递给 Fog of War）— 由 game_mode 自动决定，不由玩家配置
+
+# game_mode → vision_strategy 映射规则（在 start_setup() 中自动设置）：
+#   AGENT_VS_AGENT     → PATH_REACH      (LLM Agent 使用路径可达感知)
+#   PLAYER_VS_AGENT    → LINE_OF_SIGHT   (人类玩家使用视线)
+#   PLAYER_VS_PLAYER   → LINE_OF_SIGHT   (人类玩家使用视线)
+# VisionStrategy 是共享枚举类型，定义在此处（MatchConfig 层），FoW 引用
+enum VisionStrategy { PATH_REACH, LINE_OF_SIGHT }
 
 MatchStateManager:
   current_state: MatchState        # 当前状态
@@ -118,6 +126,7 @@ MatchStateManager:
 | **Maze Generator** | Manager -> Generator（通过信号） | `state_changed` 信号 | Setup 阶段，Generator 监听信号开始生成迷宫 |
 | **LLM Agent Integration** | Agent -> Manager | 监听 `tick` 信号 | 每个 tick，Agent 系统读取信号执行一次 LLM 决策 + 移动 |
 | **Grid Movement** | Movement -> Manager | 监听 `tick` 信号，查询 `is_playing()` | 仅在 Playing 状态下处理移动请求 |
+| **Fog of War** | FoW -> Manager（通过信号） | `state_changed` 信号 | COUNTDOWN 阶段，FoW 监听信号调用 `initialize(maze, agent_ids)` 创建 VisionMap 并刷新初始视野。`initialize()` 从 MazeData 读取 spawn 位置，并从 MatchConfig 读取 `vision_strategy`。Rematch 时相同流程（重新 initialize 即可） |
 | **Win Condition** | WinCon -> Manager | `finish_match(result, winner_id)` | 检测到胜利条件后调用，触发比赛结束 |
 | **Match HUD** | HUD -> Manager | 监听 `tick` 信号，查询 `get_tick_count()` / `get_elapsed_time()` | 显示比赛时间和 tick 数 |
 | **Result Screen** | Result -> Manager | 监听 `match_finished` 信号，查询 `get_config()` | 展示比赛结果、双方 prompt、比赛时长 |
@@ -187,6 +196,7 @@ countdown_remaining = countdown_duration - (current_time - countdown_start_time)
 | **Maze Generator** | Generator depends on this | 监听 `state_changed` 信号，在 Setup 阶段启动迷宫生成 |
 | **LLM Agent Integration** | Agent depends on this | 监听 `tick` 信号驱动 LLM 决策循环，查询 `is_playing()` |
 | **Grid Movement** | Movement depends on this | 监听 `tick` 信号，仅在 Playing 状态处理移动 |
+| **Fog of War** | FoW depends on this | 监听 `state_changed` 信号，在 COUNTDOWN 阶段调用 `initialize(maze, agent_ids)` 创建 VisionMap、刷新初始视野（从 MazeData 读取 spawn 位置）、读取 `MatchConfig.vision_strategy` 选择视野算法 |
 | **Win Condition / Chest** | WinCon depends on this | 调用 `finish_match()` 触发比赛结束 |
 | **Match HUD** | HUD depends on this | 监听 `tick` 信号更新时间显示，查询 `get_elapsed_time()` |
 | **Result Screen** | Result depends on this | 监听 `match_finished` 信号，读取 `result` / `winner_id` / `config` 展示结果 |
