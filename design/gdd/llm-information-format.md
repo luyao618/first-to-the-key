@@ -2,14 +2,14 @@
 
 > **Status**: Approved
 > **Author**: design-system agent
-> **Last Updated**: 2026-04-01
+> **Last Updated**: 2026-04-03
 > **System Index**: #8
 > **Layer**: Feature
 > **Implements Pillar**: Human-AI Symbiosis, Information Trade-off, Simple Rules Deep Play
 
 ## Overview
 
-LLM Information Format 是将游戏运行时状态序列化为 LLM 可理解的文本提示、并将 LLM 文本响应解析为游戏动作的**双向翻译层**。每个 tick，LLM Agent Integration 调用本系统为每个 Agent 构建一条 prompt message：包含 Agent 当前位置、可通行方向、视野范围内的迷宫结构（Visible cells 的墙壁和标记、Explored cells 的墙壁）、已访问历史、当前钥匙进度。LLM 返回一个 JSON 方向指令，本系统解析并转换为 `MoveDirection` 交给 Grid Movement 执行。
+LLM Information Format 是将游戏运行时状态序列化为 LLM 可理解的文本提示、并将 LLM 文本响应解析为游戏动作的**双向翻译层**。每个 tick，LLM Agent Integration 调用本系统为每个 Agent 构建一条 prompt message：包含 Agent 当前位置、可通行方向、视野范围内的迷宫结构（Visible cells 的墙壁和标记、Explored cells 的墙壁）、已访问历史、当前钥匙进度。LLM 返回一个 JSON 响应（主格式为目标坐标 `{"target": [x, y]}`，降级格式为单步方向 `{"direction": "NORTH"}`），本系统解析为 `ParsedResponse` 交给 LLM Agent Integration 处理（目标坐标由 Agent Integration 执行 A* 寻路，单步方向直接写入 Grid Movement）。
 
 本系统是整个游戏的**核心假设验证点**——如果 LLM 无法从文本表示中有效导航迷宫，游戏概念不成立。因此设计目标是：信息表示必须对 LLM "友好"（结构化、无歧义、token 高效），同时严格遵循 Fog of War 的可见性规则（不泄露 Agent 不应知道的信息）。本系统不调用 LLM API（由 LLM Agent Integration 负责）、不处理移动逻辑（由 Grid Movement 负责）、不管理可见性（由 Fog of War 负责）——它只负责**格式转换**。
 
@@ -27,10 +27,10 @@ LLM Information Format 是玩家不会直接看到的系统——但它决定了
 
 1. LLM Information Format 是一个**无状态转换器**——每次调用 `build_prompt()` 时从上游系统实时读取数据，不缓存任何跨 tick 的状态
 2. 每个 tick，LLM Agent Integration 为每个 Agent 调用 `build_prompt(agent_id)` 获取完整的 prompt message，发送给 LLM API
-3. LLM 的文本响应通过 `parse_response(text)` 解析为 `MoveDirection`，交给 Grid Movement 的 `set_direction()` 执行
+3. LLM 的文本响应通过 `parse_response(text)` 解析为 `ParsedResponse`（目标坐标或单步方向），交给 LLM Agent Integration 处理（目标坐标 → A* 寻路生成 path_queue；单步方向 → 直接 `set_direction()`）
 4. **信息边界严格遵循 Fog of War**：只有 `VISIBLE` 状态的 cell 会包含标记信息（钥匙/宝箱），`EXPLORED` cell 仅包含墙壁结构，`UNKNOWN` cell 完全不出现在 prompt 中
 5. Prompt 由**系统消息（System Message）**和**每 tick 状态消息（State Message）**两部分组成。System Message 在比赛开始前由玩家的 prompt + 固定规则说明构成，State Message 每个 tick 动态生成
-6. LLM 的输出格式固定为 JSON：`{"direction": "NORTH|EAST|SOUTH|WEST"}`。任何无法解析为合法方向的响应，等同于 `NONE`（原地不动）
+6. LLM 的输出格式为 JSON，主格式 `{"target": [x, y]}`（目标坐标，系统自动 A* 寻路），降级格式 `{"direction": "NORTH|EAST|SOUTH|WEST"}`（单步方向）。解析优先级：先检查 `target`，再检查 `direction`，均无则等同于 `NONE`（原地不动）
 7. 所有坐标使用 `(x, y)` 格式，X 轴向右，Y 轴向下，与 Maze Data Model 一致
 
 ### Prompt Structure
@@ -58,7 +58,8 @@ LLM Information Format 是玩家不会直接看到的系统——但它决定了
 │  └─────────────────────────────────┘│
 ├─────────────────────────────────────┤
 │  LLM Response                       │
-│  {"direction": "NORTH"}             │
+│  {"target": [8, 5]}                │
+│  (fallback: {"direction": "NORTH"})│
 └─────────────────────────────────────┘
 ```
 
@@ -81,7 +82,10 @@ COORDINATE SYSTEM:
 - NORTH = y-1, SOUTH = y+1, EAST = x+1, WEST = x-1.
 
 OUTPUT FORMAT:
-- Respond with ONLY a JSON object: {"direction": "NORTH|EAST|SOUTH|WEST"}
+- Respond with ONLY a JSON object: {"target": [x, y]}
+- x and y are integer coordinates of the cell you want to move toward. The system will pathfind automatically.
+- The target must be a cell you can currently see (VISIBLE) or have explored (EXPLORED).
+- Fallback: {"direction": "NORTH|EAST|SOUTH|WEST"} for a single-step move (less efficient).
 - Do NOT include any explanation, reasoning, or extra text.
 
 PLAYER STRATEGY:
@@ -200,35 +204,55 @@ VISITED (cells you have been to):
 (5,5) (5,4) (5,3) (4,3) (4,2) (4,1) (3,1)
 ```
 
-已访问 cell 按首次访问时间倒序排列（最近首次到达的在前），以空格分隔。这帮助 LLM 识别"我已经走过哪里"，实现避免重复访问的策略。注意：重复访问同一 cell 不会改变其在列表中的位置（与 Grid Movement 的 `visited_cells` 数据结构一致——仅在首次访问时追加记录）。
+已访问 cell 按首次访问时间倒序排列（最近首次到达的在前），以空格分隔。这帮助 LLM 识别"我已经走过哪里"，实现避免重复访问的策略。底层数据源 Grid Movement 的 `visited_cells` 按正序存储（旧到新、append-only），本系统在构建 prompt 时反转输出顺序。重复访问同一 cell 不会改变其在列表中的位置——仅首次访问时记录。
 
 ### Response Parsing
 
 ```
-parse_response(text: String) -> MoveDirection:
+enum ParsedResponseType { TARGET, DIRECTION, NONE }
+
+ParsedResponse:
+  type: ParsedResponseType
+  target: Vector2i          # 有效当 type == TARGET
+  direction: MoveDirection  # 有效当 type == DIRECTION
+
+parse_response(text: String) -> ParsedResponse:
   # 1. 尝试提取 JSON
   json = extract_json(text)           # 寻找第一个 {...} 块
   if json == null:
     log_warning("No JSON found in LLM response")
-    return NONE
+    return ParsedResponse(NONE)
 
-  # 2. 读取 direction 字段
-  dir_str = json.get("direction", "")
+  # 2. 优先检查 target 字段
+  if json.has("target"):
+    var arr = json["target"]
+    if arr is Array and arr.size() == 2:
+      var x = int(arr[0])
+      var y = int(arr[1])
+      return ParsedResponse(TARGET, target=Vector2i(x, y))
+    else:
+      log_warning("Invalid target format: " + str(arr))
+      # 继续尝试 direction 降级
+
+  # 3. 降级检查 direction 字段
+  var dir_str = json.get("direction", "")
   dir_str = dir_str.to_upper().strip()
 
-  # 3. 映射到 MoveDirection
   match dir_str:
-    "NORTH", "N", "UP":    return NORTH
-    "EAST",  "E", "RIGHT": return EAST
-    "SOUTH", "S", "DOWN":  return SOUTH
-    "WEST",  "W", "LEFT":  return WEST
+    "NORTH", "N", "UP":    return ParsedResponse(DIRECTION, direction=NORTH)
+    "EAST",  "E", "RIGHT": return ParsedResponse(DIRECTION, direction=EAST)
+    "SOUTH", "S", "DOWN":  return ParsedResponse(DIRECTION, direction=SOUTH)
+    "WEST",  "W", "LEFT":  return ParsedResponse(DIRECTION, direction=WEST)
     _:
-      log_warning("Invalid direction: " + dir_str)
-      return NONE
+      if dir_str != "":
+        log_warning("Invalid direction: " + dir_str)
+      return ParsedResponse(NONE)
 ```
 
 **容错策略**：
-- 接受缩写（N/E/S/W）和别名（UP/DOWN/LEFT/RIGHT）
+- 优先解析 `target` 坐标（主格式），失败则降级到 `direction`（旧格式）
+- target 坐标的合法性验证（范围、可见性、可达性）由 LLM Agent Integration 负责，本系统只提取原始值
+- 接受方向缩写（N/E/S/W）和别名（UP/DOWN/LEFT/RIGHT）
 - 忽略 JSON 外的文本（LLM 可能在 JSON 前后添加解释）
 - 无法解析时返回 `NONE`（原地不动），不重试、不崩溃
 
@@ -253,7 +277,7 @@ LLMInformationFormat:
   build_state_message(agent_id: int, tick_count: int) -> String
 
   # --- 解析接口 ---
-  parse_response(text: String) -> MoveDirection
+  parse_response(text: String) -> ParsedResponse  # 返回 TARGET(坐标) / DIRECTION(方向) / NONE
 
   # --- 调试接口 ---
   get_last_prompt(agent_id: int) -> String    # 返回最后一次为该 Agent 构建的完整 prompt（调试用）
@@ -299,7 +323,7 @@ total_tokens_per_match = (system_tokens + avg_state_tokens + avg_response_tokens
 |----------|------|-------|--------|-------------|
 | system_tokens | int | ~200 | System Message | 固定开销（每次 API 调用都包含） |
 | avg_state_tokens | int | 100 - 300 | State Message 平均值 | 每 tick 的状态描述 |
-| avg_response_tokens | int | ~15 | LLM Response 平均值 | LLM 返回的方向指令 |
+| avg_response_tokens | int | ~15 | LLM Response 平均值 | LLM 返回的目标坐标或方向指令（`{"target": [8, 5]}` ≈ 15 tokens） |
 | total_ticks | int | 50 - 600 | Match State Manager | 一场比赛的总 tick 数 |
 | 2 | 常量 | — | — | 两个 Agent |
 
@@ -322,11 +346,13 @@ map_height = 2 * vision_radius + 1
 | Scenario | Expected Behavior | Rationale |
 |----------|------------------|-----------|
 | LLM 返回空字符串或纯空白 | `parse_response()` 返回 `NONE`，Agent 原地不动 | 网络异常或 LLM 拒答都可能导致空响应。不崩溃，消耗一个 tick |
-| LLM 返回合法 JSON 但 direction 字段缺失 | `parse_response()` 返回 `NONE` | 格式错误等同于无响应 |
+| LLM 返回合法 JSON 但 target 和 direction 字段均缺失 | `parse_response()` 返回 `NONE` | 格式错误等同于无响应 |
+| LLM 返回 `{"target": [8, 5]}` | `parse_response()` 返回 `ParsedResponse(TARGET, target=(8,5))`。坐标合法性验证（范围、可见性、可达性）由 LLM Agent Integration 负责 | 信息格式层只提取原始值，不做游戏逻辑验证。分层清晰 |
+| LLM 返回 `{"target": [-1, 999]}` | `parse_response()` 正常返回 TARGET 坐标。验证失败由 LLM Agent Integration 处理，等同于 NONE | 同上 |
 | LLM 返回 `{"direction": "NORTHEAST"}` 或其他非法方向 | `parse_response()` 返回 `NONE`，打印警告日志 | 只接受四个基本方向，不支持对角线移动 |
-| LLM 在 JSON 前后添加解释文字：`"I'll go north. {"direction": "NORTH"}"` | `parse_response()` 提取第一个 `{...}` 块，正常解析为 `NORTH` | LLM 常常"想出声"，解析器应容错 |
+| LLM 在 JSON 前后添加解释文字：`"I'll go to (8,5). {"target": [8, 5]}"` | `parse_response()` 提取第一个 `{...}` 块，正常解析为 TARGET | LLM 常常"想出声"，解析器应容错 |
 | LLM 返回多个 JSON 对象 | 提取第一个 `{...}` 块，忽略后续内容 | 取第一个决策，简单确定 |
-| LLM 返回的方向指向墙壁 | `parse_response()` 正常返回该方向。Grid Movement 的 `can_move()` 负责拒绝并记录撞墙 | 信息格式层不做合法性验证——那是 Grid Movement 的职责。分层清晰 |
+| LLM 返回的方向指向墙壁（direction 降级格式） | `parse_response()` 正常返回该方向。Grid Movement 的 `can_move()` 负责拒绝并记录撞墙 | 信息格式层不做合法性验证——那是 Grid Movement 的职责。分层清晰 |
 | Visible cells 为空（Agent 视野内只有自己脚下的 cell） | `VISIBLE CELLS` 区域只包含 Agent 当前位置一条记录。正常构建 prompt | vision_radius = 0 的极端情况，系统不需要特殊处理 |
 | Explored cells 数量巨大（Agent 已探索 50x50 迷宫的大部分） | Explored cells 列表按离 Agent 当前位置的路径距离排序，截断至 `max_explored_count` 条（默认 30）。提醒 LLM "showing nearest {n} of {total} explored cells" | 防止 token 膨胀超出 LLM 上下文窗口限制。优先显示距离近的（更可能与当前决策相关） |
 | Visited cells 数量巨大 | 截断至 `max_visited_count` 条（默认 20），保留最近访问的。提醒 LLM "showing last {n} of {total} visited" | 同上，最近访问的 cell 对避免重复访问更有价值 |
@@ -391,14 +417,18 @@ LLM Information Format 是纯数据转换系统，不直接产生视觉或音频
 - [ ] 钥匙在 Visible cell 上新出现时，prompt 在当前 tick 即包含该钥匙位置
 
 ### 响应解析
-- [ ] `parse_response('{"direction": "NORTH"}')` 返回 `MoveDirection.NORTH`
-- [ ] `parse_response('{"direction": "n"}')` 返回 `MoveDirection.NORTH`（大小写不敏感）
-- [ ] `parse_response('{"direction": "UP"}')` 返回 `MoveDirection.NORTH`（别名支持）
-- [ ] `parse_response('I think north. {"direction": "NORTH"}')` 正确提取 JSON 并返回 `NORTH`
-- [ ] `parse_response('')`（空字符串）返回 `MoveDirection.NONE`
-- [ ] `parse_response('{"direction": "NORTHEAST"}')` 返回 `MoveDirection.NONE`（非法方向）
-- [ ] `parse_response('{"foo": "bar"}')` 返回 `MoveDirection.NONE`（缺少 direction 字段）
-- [ ] `parse_response('not json at all')` 返回 `MoveDirection.NONE`（无 JSON）
+- [ ] `parse_response('{"target": [8, 5]}')` 返回 `ParsedResponse(TARGET, target=(8,5))`
+- [ ] `parse_response('{"target": [0, 0]}')` 返回 `ParsedResponse(TARGET, target=(0,0))`
+- [ ] `parse_response('{"target": "invalid"}')` target 解析失败，降级检查 direction，无则返回 `NONE`
+- [ ] `parse_response('{"direction": "NORTH"}')` 返回 `ParsedResponse(DIRECTION, direction=NORTH)`（降级格式）
+- [ ] `parse_response('{"direction": "n"}')` 返回 `ParsedResponse(DIRECTION, direction=NORTH)`（大小写不敏感）
+- [ ] `parse_response('{"direction": "UP"}')` 返回 `ParsedResponse(DIRECTION, direction=NORTH)`（别名支持）
+- [ ] `parse_response('{"target": [8, 5], "direction": "NORTH"}')` 返回 TARGET（target 优先于 direction）
+- [ ] `parse_response('I think north. {"direction": "NORTH"}')` 正确提取 JSON 并返回 DIRECTION
+- [ ] `parse_response('')`（空字符串）返回 `ParsedResponse(NONE)`
+- [ ] `parse_response('{"direction": "NORTHEAST"}')` 返回 `ParsedResponse(NONE)`（非法方向）
+- [ ] `parse_response('{"foo": "bar"}')` 返回 `ParsedResponse(NONE)`（缺少 target 和 direction 字段）
+- [ ] `parse_response('not json at all')` 返回 `ParsedResponse(NONE)`（无 JSON）
 
 ### 截断与 token 控制
 - [ ] Visited cells 超过 `max_visited_count` 时，仅显示最近访问的 N 个，并注明 "showing last N of M visited"

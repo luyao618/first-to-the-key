@@ -117,7 +117,8 @@ Agent 视角下，每个 cell 的状态机：
 | System | Direction | Interface | Data Flow |
 |--------|-----------|-----------|-----------|
 | **Maze Data Model** | FoW → Model | `get_neighbors(x, y)`, `has_wall(x, y, dir)` | 视野计算时沿可通行路径 BFS 扩展，需查询墙壁和邻居 |
-| **Grid Movement** | Movement → FoW | `update_vision(agent_id, new_position)` | Agent 每次移动后，Movement 系统通知 FoW 重算该 Agent 的视野 |
+| **Grid Movement** | Movement → FoW（初始化） | `update_vision(agent_id, position)` 直接调用 | Grid Movement 的 `initialize()` 完成 Mover 就位后，为每个 Mover 调用一次，触发初始视野计算 |
+| **Grid Movement** | FoW ← Movement（运行时） | FoW 监听 `mover_moved(mover_id, old_pos, new_pos)` 信号 | FoW 自行监听 `mover_moved`，在 handler 中调用内部 `update_vision(agent_id, new_pos)` 重算视野。Grid Movement 运行时不主动调用 FoW |
 | **LLM Information Format** | LLMFormat → FoW | `get_cell_visibility(agent_id, x, y)`, `get_visible_cells(agent_id)`, `get_explored_cells(agent_id)` | LLM 格式化器根据可见性决定向 LLM 发送哪些 cell 的信息 |
 | **Match Renderer** | Renderer → FoW | `get_cell_visibility(agent_id, x, y)` | Renderer 根据可见性状态决定每个 cell 的渲染方式（隐藏/半透明/完全显示） |
 | **Key Collection** | Keys → FoW | `get_cell_visibility(agent_id, x, y)` | 判断 Agent 是否能"看到"某个钥匙（Visible 状态下才显示钥匙图标） |
@@ -221,13 +222,13 @@ coverage = known_count / total_cells
 | System | Direction | Nature of Dependency |
 |--------|-----------|---------------------|
 | **Maze Data Model** | FoW depends on this | 视野 BFS 需要查询 `get_neighbors()` 和 `has_wall()` 来沿可通行路径扩展。没有 MazeData 就无法计算视野 |
-| **Grid Movement** | Movement → FoW（通知方向） | Movement 系统在 Agent 移动后调用 `update_vision()` 触发视野重算。FoW 不主动监听移动，只被动接收通知。依赖方向：Grid Movement 调用 FoW 接口，FoW 不依赖 Movement |
+| **Grid Movement** | FoW depends on this（信号 + 初始化调用） | **运行时**：FoW 监听 Grid Movement 的 `mover_moved` 信号，在 handler 中调用 `update_vision()` 重算视野。**初始化时**：Grid Movement 的 `initialize()` 完成 Mover 就位后，主动调用 `FoW.update_vision()` 触发初始视野计算。依赖方向：FoW 依赖 Grid Movement 的信号和初始化调用来驱动视野更新 |
 | **LLM Information Format** | LLMFormat depends on FoW | 格式化器查询 `get_visible_cells()` 和 `get_explored_cells()` 来决定向 LLM 发送哪些 cell 信息。FoW 提供可见性数据，LLMFormat 决定如何序列化 |
 | **Match Renderer** | Renderer depends on FoW | Renderer 查询 `get_cell_visibility()` 决定每个 cell 的渲染方式：Unknown = 隐藏/黑色，Explored = 半透明/灰色，Visible = 完全显示 |
 | **Key Collection** | Keys → FoW（信息层面） | FoW 决定 Agent 是否**知道**某把钥匙的存在（仅 Visible cell 上的标记对 Agent 信息可见）。注意：钥匙**拾取判定**不依赖可见性——Agent 站在钥匙 cell 上即可拾取，无论该 cell 之前是否在视野中。FoW 影响的是 LLM 是否收到钥匙位置信息，而非拾取逻辑 |
 | **Win Condition / Chest** | WinCon → FoW（信息层面） | FoW 查询 `is_chest_active()` 判断宝箱是否已出现。Inactive 的宝箱不向 Agent 暴露 marker 信息，Active 的宝箱遵循正常视野规则——Agent 视野范围内才可见。与 Key Collection 的可见性逻辑一致 |
 | **Match State Manager** | MSM triggers FoW | Match 开始时通知 FoW 初始化 VisionMap，Match 结束时通知 FoW 清理资源 |
-| **(无上游依赖除 Maze Data Model)** | — | Fog of War 仅依赖 Maze Data Model 的查询接口。它不依赖 Grid Movement、Key Collection 或任何其他系统的内部状态 |
+| **(上游依赖总结)** | — | Fog of War 依赖 Maze Data Model（BFS 查询）和 Grid Movement（`mover_moved` 信号驱动视野更新 + `initialize()` 时直接调用）。这两个依赖都是单向的——FoW 消费它们的数据/信号，它们不依赖 FoW 的内部状态 |
 
 ## Tuning Knobs
 
