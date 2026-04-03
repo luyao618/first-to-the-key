@@ -21,7 +21,7 @@
 | **Genre** | Competitive puzzle-racing / AI strategy |
 | **Platform** | PC |
 | **Target Audience** | AI enthusiasts, prompt engineers, competitive puzzle fans |
-| **Player Count** | 2 players (local) or spectator mode (Agent vs Agent) |
+| **Player Count** | 2 players (local) — each writes a prompt and spectates their agent |
 | **Session Length** | Under 10 minutes per match |
 | **Monetization** | TBD (personal project, not prioritized) |
 | **Estimated Scope** | Small (4-8 weeks) |
@@ -37,9 +37,9 @@
 > thrill isn't in pressing buttons — it's in watching your carefully crafted
 > prompt outsmart your opponent's.
 >
-> In human vs human mode, it flips: you're the explorer in the dark, and your
-> LLM observer is your lifeline — but every time you call for help, you freeze
-> in place while your rival keeps running.
+> In human vs human mode *(Core Tier)*, it flips: you're the explorer in the
+> dark, and your LLM observer is your lifeline — but every time you call for
+> help, you freeze in place while your rival keeps running.
 
 ---
 
@@ -75,7 +75,7 @@
 
 - Players will iterate on prompts between matches, refining their AI's strategy
 - Players will develop mental models of how LLMs interpret spatial instructions
-- In observer mode, players will weigh the cost of stopping vs. the value of information
+- *(Core Tier)* In observer mode, players will weigh the cost of stopping vs. the value of information
 - Players will try to anticipate opponent's AI behavior and counter-strategy through prompt design
 - Community will share and discuss effective prompt patterns
 
@@ -85,7 +85,7 @@
 2. **Sequential key collection** — Three keys (Brass → Jade → Crystal) must be found in order, each appearing only after the previous is collected
 3. **Fog-of-war vision system** — Explorers see only a limited radius; observers see the full map
 4. **LLM Agent integration** — Agents receive local vision data and make movement decisions via LLM API calls
-5. **Observer communication system** — Text-based communication between player and observer, with movement-freeze cost
+5. **Observer communication system** *(Core Tier)* — Text-based communication between player and observer, with movement-freeze cost
 
 ---
 
@@ -95,7 +95,7 @@
 
 | Need | How This Game Satisfies It | Strength |
 | ---- | ---- | ---- |
-| **Autonomy** (freedom, meaningful choice) | Prompt design is entirely free-form; observer calls are voluntary risk/reward decisions | Core |
+| **Autonomy** (freedom, meaningful choice) | Prompt design is entirely free-form; strategic choices emerge from how you instruct your AI | Core |
 | **Competence** (mastery, skill growth) | Prompt quality directly correlates to AI performance; players can see measurable improvement | Core |
 | **Relatedness** (connection, belonging) | Local multiplayer creates shared moments; prompt sharing builds community | Supporting |
 
@@ -121,22 +121,22 @@
 
 **Agent vs Agent mode**: Watch your AI navigate the maze — it hits a fork, chooses a direction. Did your prompt teach it to explore systematically or does it wander randomly? The tension is in watching your words come to life.
 
-**Player vs Player mode**: Move through the maze grid-by-grid, choosing directions at each fork. Do you call your observer for help (and freeze) or trust your instincts and keep running?
+**Player vs Player mode** *(Core Tier)*: Move through the maze grid-by-grid, choosing directions at each fork. Do you call your observer for help (and freeze) or trust your instincts and keep running?
 
 ### Short-Term (5 minutes — one key hunt)
 
-Search the maze → discover key location (or receive observer hint) → plan route → reach key → next key appears → new search begins. Each key hunt is a mini-race with a clear finish line.
+Search the maze → discover key location → plan route → reach key → next key appears → new search begins. Each key hunt is a mini-race with a clear finish line.
 
 ### Session-Level (under 10 minutes — one match)
 
-Match setup (prompt writing or mode selection) → maze generates → hunt Brass Key 🔑 → hunt Jade Key 🔑 → hunt Crystal Key 🔑 → treasure chest appears → race to chest → victory! → review AI performance → tweak prompt → rematch.
+Maze generates → players see full map (God View) → write prompts for their agents → countdown → hunt Brass Key 🔑 → hunt Jade Key 🔑 → hunt Crystal Key 🔑 → treasure chest appears → race to chest → victory! → review AI performance → tweak prompt → rematch.
 
 ### Long-Term Progression
 
 - Build a personal library of effective prompts
 - Understand LLM spatial reasoning patterns
 - Master different maze types and sizes
-- Develop meta-strategies (exploration vs. exploitation, when to call observer)
+- Develop meta-strategies (exploration vs. exploitation; *(Core Tier)* when to call observer)
 - (Future) Unlock new maze types, visual themes, items
 
 ### Retention Hooks
@@ -168,11 +168,13 @@ Victory is determined by decision quality, not luck or information asymmetry.
 
 *Design test*: "If we're debating whether to let one player start closer to the first key, this pillar says: no — maze generation must guarantee roughly equal path distances for both sides."
 
+> **当前验证状态**：Maze Generator 对每个目标独立验证双方最短路径差（≤ 2 步），但尚未覆盖真实比赛中的累计路线公平性（Spawn → Brass → Jade → Crystal → Chest）。这是已识别的待解决项，见 `maze-generator.md` Open Questions。
+
 ### Pillar 4: Simple Rules, Deep Play
 
 Learn the rules in under ten minutes. Start glimpsing the strategic depth after ten matches.
 
-*Design test*: "If we're debating whether to add a complex skill tree or ability system, this pillar says: first prove that the core racing + observer mechanic is already engaging enough on its own."
+*Design test*: "If we're debating whether to add a complex skill tree or ability system, this pillar says: first prove that the core racing + prompt strategy mechanic is already engaging enough on its own."
 
 ### Anti-Pillars (What This Game Is NOT)
 
@@ -234,17 +236,17 @@ Learn the rules in under ten minutes. Start glimpsing the strategic depth after 
 
 - **LLM spatial reasoning may be poor**: If LLMs can't effectively navigate mazes from text descriptions, the core concept falls apart. Mitigation: early prototype to test, design the information format to be LLM-friendly (grid coordinates, compass directions).
 - **Prompt meta may converge**: If everyone discovers the "one best prompt," the game loses depth. Mitigation: varying maze types, maze sizes, and (future) items create shifting metas.
-- **Observer call pacing**: If the freeze penalty is too harsh, no one calls; if too lenient, everyone calls constantly. Mitigation: tunable freeze duration, playtest early.
+- **Observer call pacing** *(Core Tier)*: If the freeze penalty is too harsh, no one calls; if too lenient, everyone calls constantly. Mitigation: tunable freeze duration, playtest early.
 
 ### Technical Risks
 
-- **LLM API latency**: API calls may take 1-5 seconds, disrupting game flow. Mitigation: the freeze-on-call mechanic naturally masks latency; Agent mode can use asynchronous decision-making.
+- **LLM API latency**: API calls may take 1-5 seconds, disrupting game flow. Mitigation: path queue + prefetch mechanism lets agents continue moving while the next API call is in flight; agents rarely stall (see `llm-agent-integration.md`).
 - **Godot + LLM integration**: First time using Godot; HTTP request handling and JSON parsing need to work smoothly. Mitigation: backend experience transfers well.
 - **Maze generation fairness**: Ensuring both players have roughly equal-length optimal paths to each key. Mitigation: symmetric maze generation or path-length validation.
 
 ### Market Risks
 
-- **Niche audience**: AI-enthusiast gamers are a small (but growing) segment. Mitigation: the game is also fun as a pure maze racer for non-AI players (human vs human mode).
+- **Niche audience**: AI-enthusiast gamers are a small (but growing) segment. Mitigation: the game is also fun as a pure maze racer for non-AI players *(Core Tier: human vs human mode)*.
 - **LLM API costs**: Each match requires multiple API calls. Mitigation: players provide their own API key; optimize prompt/response size.
 
 ### Scope Risks
@@ -256,9 +258,9 @@ Learn the rules in under ten minutes. Start glimpsing the strategic depth after 
 
 - **What information format works best for LLMs?** — Prototype with different representations (grid ASCII, coordinate lists, natural language descriptions) and measure navigation success rate.
 - **What's the right fog-of-war radius?** — Too small = frustrating random wandering; too large = trivial navigation. Needs playtesting.
-- **How should the prompt input work?** — Single prompt before match? Or allow mid-match system prompt updates (with freeze penalty)? MVP: single prompt before match.
-- **Should agents see their own movement history?** — Providing "you've already visited these cells" could dramatically improve LLM performance. Test in prototype.
-- **How does the treasure chest location work?** — When any player/agent collects the Crystal Key, the chest appears. Is its location known to all, or only to the player who triggered it?
+- ~~**How should the prompt input work?**~~ — *Resolved: MVP uses single prompt before match. See Design Clarifications §3.*
+- ~~**Should agents see their own movement history?**~~ — *Resolved: Yes. LLM Information Format includes visited cell history in every state message. See `llm-information-format.md`.*
+- ~~**How does the treasure chest location work?**~~ — *Resolved: Chest follows fog-of-war rules. See Design Clarifications §4.*
 
 ---
 
@@ -309,11 +311,12 @@ Learn the rules in under ten minutes. Start glimpsing the strategic depth after 
 │  MATCH                                      │
 │  Both agents navigate with LOCAL vision     │
 │  Players watch from GOD VIEW (full map)     │
-│  Players can send messages to their agent   │
-│    → Agent FREEZES while receiving message  │
+│  No mid-match intervention — prompt only    │
 │  First to open chest wins                   │
 └─────────────────────────────────────────────┘
 ```
+
+> Core Tier 扩展：赛中可向 Agent 发消息（Agent 冻结接收），见 Design Clarifications §3 Mid-Match Messaging。
 
 ### Mode 2: Player vs Agent (Core)
 
@@ -348,12 +351,14 @@ Learn the rules in under ten minutes. Start glimpsing the strategic depth after 
 
 *Resolved 2026-03-30 during design review.*
 
-### 1. Movement Model: Real-Time with Tick
+### 1. Movement Model: Real-Time with Tick + Path Queue
 
-Agent 按固定 tick 间隔移动（每 tick 移动一格）。LLM 需要在 tick 时间内返回移动决策，否则 Agent 原地等待。这保持了紧张的竞赛节奏，同时 tick 间隔是可调参数。
+Agent 按固定 tick 间隔移动（每 tick 移动一格）。LLM 不需要每 tick 都做决策——它返回一个**目标坐标**，系统自动 A* 寻路生成路径队列（path queue），Agent 沿队列连续移动。只有在到达**决策点**（岔路口、死胡同、新目标出现）时才请求新的 LLM 决策，且采用**预请求**机制：到达决策点时提前发起 API 调用，Agent 继续沿旧路径行进，响应到达后无缝切换新路径。
 
 - **不是回合制**：两个 Agent 独立运行，不需要等对方决策完成
+- **不是每 tick 一次 API 调用**：路径队列 + 直道自动前进减少约 80% 的 API 调用
 - **Tick 间隔**：待原型测试确定（建议起始值 0.5-1.0 秒）
+- **详细规则**：见 `llm-agent-integration.md`
 
 ### 2. Key Progression: Independent Progress, Shared Positions
 

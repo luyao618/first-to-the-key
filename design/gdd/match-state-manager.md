@@ -9,13 +9,13 @@
 
 ## Overview
 
-Match State Manager 是驱动比赛生命周期的状态机系统。它管理一场比赛从配置到结束的全部阶段流转：玩家在赛前输入 prompt -> 迷宫生成 -> 比赛正式开始（tick 计时、Agent 行动）-> 某方达成胜利条件 -> 比赛结束并展示结果。该系统本身不执行迷宫生成、不移动 Agent、不判定钥匙拾取 -- 它仅维护"当前比赛处于哪个阶段"这一核心状态，并通过信号（signals）通知其他系统发生了阶段切换。作为 Foundation 层组件，它为 LLM Agent Integration 提供 tick 驱动、为 Prompt Input 和 Result Screen 提供阶段入口/出口、为 Win Condition 提供比赛结束的触发通道。MVP 阶段仅支持 Agent vs Agent 模式，但状态机设计应预留扩展到 Player vs Agent 和 Player vs Player 模式的能力。
+Match State Manager 是驱动比赛生命周期的状态机系统。它管理一场比赛从配置到结束的全部阶段流转：进入 SETUP 阶段后迷宫生成，玩家在 God View 下查看迷宫并输入 prompt -> 比赛正式开始（tick 计时、Agent 行动）-> 某方达成胜利条件 -> 比赛结束并展示结果。该系统本身不执行迷宫生成、不移动 Agent、不判定钥匙拾取 -- 它仅维护"当前比赛处于哪个阶段"这一核心状态，并通过信号（signals）通知其他系统发生了阶段切换。作为 Foundation 层组件，它为 LLM Agent Integration 提供 tick 驱动、为 Prompt Input 和 Result Screen 提供阶段入口/出口、为 Win Condition 提供比赛结束的触发通道。MVP 阶段仅支持 Agent vs Agent 模式，但状态机设计应预留扩展到 Player vs Agent 和 Player vs Player 模式的能力。
 
 ## Player Fantasy
 
 Match State Manager 和 Maze Data Model 类似，是一个"幕后"系统，玩家不会直接感知它的存在。但它塑造了比赛的节奏和仪式感：
 
-**赛前准备的期待感**：当你写好 prompt 点击"开始"，倒计时的出现告诉你"比赛即将开始" -- 这个从准备到开赛的切换，就是状态机在工作。它创造了一个仪式化的"起跑线"瞬间。
+**赛前准备的期待感**：迷宫生成完毕，你看着整张地图，思考该怎么指导你的 AI——写好 prompt 点击"开始"，倒计时的出现告诉你"比赛即将开始" -- 这个从准备到开赛的切换，就是状态机在工作。它创造了一个仪式化的"起跑线"瞬间。
 
 **比赛中的紧张感**：Tick 计时器持续推进，你的 Agent 每秒都在做决策。Match State Manager 驱动着这个心跳般的节奏，让观战不是被动等待，而是一场有节奏的竞赛。
 
