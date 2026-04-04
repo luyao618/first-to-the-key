@@ -136,7 +136,7 @@ NEED_BRASS → NEED_JADE → NEED_CRYSTAL → KEYS_COMPLETE
 | **Win Condition / Chest** | Keys → WinCon | `chest_unlocked(agent_id)` 信号 | 某 Agent 集齐三把钥匙后通知宝箱出现 |
 | **Match Renderer** | Renderer → Keys | `is_key_active(key_type)`, `get_agent_progress(agent_id)` | 渲染钥匙图标（仅 Active 的钥匙），渲染 Agent 的钥匙进度 |
 | **Match HUD** | HUD → Keys | `get_agent_progress(agent_id)` | 显示双方钥匙拾取进度（如 3 格进度条） |
-| **LLM Information Format** | LLMFormat → Keys | `is_key_active(key_type)`, `get_agent_progress(agent_id)` | 将当前钥匙状态序列化给 LLM（哪些钥匙已拿、下一把是什么） |
+| **LLM Information Format** | LLMFormat → Keys | `is_key_active(key_type)`, `get_agent_progress(agent_id)` | 将钥匙激活状态和 Agent 进度序列化给 LLM。LLMFormat 从 `get_agent_progress()` 推导 OBJECTIVE 文本（钥匙名或 "treasure chest"）和 keys_collected 数值 |
 | **Match State Manager** | Keys → MSM | 监听 `state_changed` 信号 | Key Collection 监听 MSM 的 `state_changed`：COUNTDOWN 时调用 `initialize(maze)` 读取钥匙位置并**重置所有内部状态**（global_phase 回到 BRASS_ACTIVE，所有 Agent 进度回到 NEED_BRASS），PLAYING 时启用拾取判定，FINISHED 时停止处理并**保持最终状态**（下游系统如 Result Screen、Match HUD、Match Renderer 在 FINISHED 后仍需读取钥匙进度）。Rematch 流程：`MatchStateManager.reset()` → `state_changed(_, SETUP)` → Maze Generator 生成新迷宫 → `state_changed(_, COUNTDOWN)` → Key Collection 的 `initialize()` 自动用新 MazeData 重置一切。不需要额外的显式 `reset()` 调用 |
 
 ## Formulas

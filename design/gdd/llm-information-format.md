@@ -113,9 +113,20 @@ EXPLORED CELLS (walls only, items may have changed):
 VISITED (cells you have been to):
 {visited_list}
 
-OBJECTIVE: Find {current_key_name} key
+OBJECTIVE: {objective_text}
 Keys collected: {keys_collected}/{keys_total}
 ```
+
+**OBJECTIVE 生成规则**（基于 `KeyCollection.get_agent_progress(agent_id)` 的返回值）：
+
+| AgentKeyState | objective_text | 说明 |
+|---------------|---------------|------|
+| `NEED_BRASS` | `Find the Brass key` | 初始目标 |
+| `NEED_JADE` | `Find the Jade key` | 已拾取 Brass |
+| `NEED_CRYSTAL` | `Find the Crystal key` | 已拾取 Jade |
+| `KEYS_COMPLETE` | `Find the treasure chest` | 三把钥匙已集齐，宝箱已 Active |
+
+`keys_collected` 由 `AgentKeyState` 推导：`NEED_BRASS` → 0，`NEED_JADE` → 1，`NEED_CRYSTAL` → 2，`KEYS_COMPLETE` → 3。`keys_total` 固定为 3。
 
 ### ASCII Map Format
 
@@ -265,7 +276,7 @@ LLMInformationFormat:
   maze: MazeData
   fog: FogOfWar
   movement: GridMovementManager
-  keys: KeyCollection              # 查询钥匙进度和激活状态（is_key_active）
+  keys: KeyCollection              # 查询钥匙进度和激活状态（get_agent_progress, is_key_active）
   win_condition: WinCondition      # 查询宝箱激活状态（is_chest_active）
 
   # --- 配置 ---
@@ -294,7 +305,7 @@ LLMInformationFormat:
 | **Maze Data Model** | Format → Model | `has_wall()`, `get_markers_at()`, `get_cell()` | 读取 Visible/Explored cells 的墙壁结构和标记 |
 | **Fog of War** | Format → FoW | `get_visible_cells(agent_id)`, `get_explored_cells(agent_id)`, `get_cell_visibility(agent_id, x, y)` | 决定哪些 cell 的信息可以发送给 LLM |
 | **Grid Movement** | Format → Movement | `get_position()`, `get_visited_cells()` | 获取 Agent 当前位置和已访问历史 |
-| **Key Collection** | Format → Keys | `get_current_target()`, `get_collected_count()`, `is_key_active()` | 获取当前需要收集的钥匙类型和已收集数量。**Marker 过滤**：`build_state_message()` 中用 `is_key_active(key_type)` 过滤 Inactive 钥匙，不将其包含在 Visible cells 的 marker 标注中 |
+| **Key Collection** | Format → Keys | `get_agent_progress(agent_id)`, `is_key_active()` | 获取该 Agent 的钥匙进度状态（`AgentKeyState`），由本系统推导 OBJECTIVE 文本和 keys_collected 数值。`is_key_active(key_type)` 用于 Visible cells 中的 marker 过滤。**Marker 过滤**：`build_state_message()` 中用 `is_key_active(key_type)` 过滤 Inactive 钥匙，不将其包含在 Visible cells 的 marker 标注中 |
 | **Win Condition / Chest** | Format → WinCon | `is_chest_active()` | **Marker 过滤**：`build_state_message()` 中用 `is_chest_active()` 过滤 Inactive 宝箱。FoW 不负责此过滤——本系统是 marker 激活过滤的执行者之一 |
 | **Match State Manager** | Format → MSM | `get_tick_count()` | 在 State Message 中包含当前 tick 编号 |
 
@@ -369,7 +380,7 @@ map_height = 2 * vision_radius + 1
 | **Maze Data Model** | LLMFormat depends on this | 查询 `has_wall()`, `get_markers_at()`, `get_cell()` 读取 Visible/Explored cells 的墙壁结构和标记内容 |
 | **Fog of War** | LLMFormat depends on this | 查询 `get_visible_cells(agent_id)`, `get_explored_cells(agent_id)`, `get_cell_visibility(agent_id, x, y)` 确定哪些 cell 的信息可以发送给 LLM |
 | **Grid Movement** | LLMFormat depends on this | 查询 `get_position()` 获取 Agent 当前位置，查询 `get_visited_cells()` 获取已访问历史 |
-| **Key Collection** | LLMFormat depends on this | 查询 `get_current_target()` 获取当前需要收集的钥匙类型，查询 `get_collected_count()` 获取已收集数量，查询 `is_key_active(key_type)` 过滤 Visible cells 中的 Inactive 钥匙 marker（FoW 不负责此过滤） |
+| **Key Collection** | LLMFormat depends on this | 查询 `get_agent_progress(agent_id)` 获取该 Agent 的钥匙进度（`AgentKeyState`），由本系统推导 OBJECTIVE 文本（钥匙名或"treasure chest"）和 keys_collected 数值。查询 `is_key_active(key_type)` 过滤 Visible cells 中的 Inactive 钥匙 marker（FoW 不负责此过滤） |
 | **Win Condition / Chest** | LLMFormat depends on this | 查询 `is_chest_active()` 过滤 Visible cells 中的 Inactive 宝箱 marker。查询 `get_chest_position()` 在宝箱 Active 且在视野内时序列化宝箱位置。FoW 不负责此过滤——marker 激活状态过滤是本系统和 Match Renderer 的职责 |
 | **Match State Manager** | LLMFormat depends on this | 查询 `get_tick_count()` 在 State Message 中包含当前 tick 编号 |
 | **LLM Agent Integration** | Agent depends on this | 调用 `build_system_message()`, `build_state_message()` 构建 prompt，调用 `parse_response()` 解析 LLM 返回 |

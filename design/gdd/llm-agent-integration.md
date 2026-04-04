@@ -27,6 +27,7 @@ LLM Agent Integration 是连接 LLM API 与游戏运行时的**决策引擎**。
 
 1. LLM Agent Integration 为每个 Agent 维护一个独立的 **AgentBrain**，包含：路径队列（path_queue）、API 请求状态（in-flight / idle）、LLM 会话配置（API endpoint, key, model）
 2. 每个 tick，系统对每个 AgentBrain 执行以下逻辑（按优先级）。本系统的 `on_tick()` 在 Tick Phase Model 的 **Phase 1（Decision）** 中执行——先于 Grid Movement 的 Phase 2（Movement），保证本 tick 写入的方向在同一 tick 内被消费，不存在 1-tick 延迟：
+   - **首 tick 特殊处理**：若 `last_move_direction == NONE`（Agent 无移动历史，即比赛刚开始），无论当前位置的通行结构如何，视为需要决策 → 若无 in-flight 请求则发起 API 请求，原地等待。这是显式分支，不依赖决策点定义中的岔路口/死胡同/直道分类
    - 若有 API 响应刚到达 → 解析目标坐标，从当前位置 A* 寻路生成新 path_queue，替换旧队列
    - 若 path_queue 非空 → 消费队头方向，调用 `GridMovement.set_direction()`
    - 若 path_queue 为空且当前位置是直道 → 自动前进（不消耗 API）
@@ -48,7 +49,13 @@ LLM Agent Integration 是连接 LLM API 与游戏运行时的**决策引擎**。
 | 死胡同 | 可通行方向 = 1（只有来路） | 走廊尽头 |
 | 新目标可见 | 视野内出现了之前不可见的钥匙或宝箱 | 走着走着看到了钥匙 |
 
-**"新目标可见"检测机制**：LLM Agent Manager 监听 Key Collection 的 `key_activated(key_type)` 信号和 `chest_unlocked(agent_id)` 信号。收到信号后，检查新目标的位置是否在该 Agent 当前 visible cells 中（调用 `FoW.get_cell_visibility(agent_id, x, y) == VISIBLE`）。若在视野内，视为决策点触发，预发起 API 请求。若不在视野内，不触发——Agent 继续当前路径，直到移动导致新目标进入视野或到达其他决策点时自然触发。此外，每次 `mover_moved` 后，系统需要检查视野更新后是否有新目标出现在 visible cells 中。**该检测使用 `call_deferred` 延迟到当前帧末尾执行**，确保 FoW 的 `update_vision()` 已经处理完毕、visible cells 已更新为最新状态。这避免了 Phase 3 内部 LLM Agent 和 FoW 的信号处理顺序不确定问题。
+**"新目标可见"检测机制**：LLM Agent Manager 监听以下三个信号来检测目标变化和新目标出现：
+
+1. **`key_activated(key_type)`**（Key Collection 发出，全局首次激活时）：新钥匙出现在迷宫中。收到后，检查新钥匙的位置是否在该 Agent 当前 visible cells 中（调用 `FoW.get_cell_visibility(agent_id, x, y) == VISIBLE`）。若在视野内，视为决策点触发，预发起 API 请求。若不在视野内，不触发——Agent 继续当前路径。
+2. **`key_collected(agent_id, key_type)`**（Key Collection 发出，每次个人拾取）：该 Agent 的进度推进，下一个目标改变。收到后，若 `agent_id` 匹配该 Brain 的 Agent，且当前无 in-flight 请求，发起新 API 请求（不清空队列）。新响应到达后替换队列。
+3. **`chest_activated`**（Win Condition 发出，宝箱从 Inactive 变为 Active 之后）：宝箱出现在迷宫中。收到后，检查宝箱位置是否在该 Agent 当前 visible cells 中。若在视野内，视为决策点触发。注意：**不监听 `chest_unlocked`**——`chest_unlocked` 到达时宝箱可能尚未被 Win Condition 激活（Phase 3 信号处理顺序不确定），而 `chest_activated` 保证宝箱已 Active，`build_state_message()` 此时能正确包含宝箱信息。
+
+此外，每次 `mover_moved` 后，系统需要检查视野更新后是否有新目标出现在 visible cells 中。**该检测使用 `call_deferred` 延迟到当前帧末尾执行**，确保 FoW 的 `update_vision()` 已经处理完毕、visible cells 已更新为最新状态。这避免了 Phase 3 内部 LLM Agent 和 FoW 的信号处理顺序不确定问题。
 | 撞墙 | path_queue 头部方向不可通行 | LLM 给的路径有误 |
 
 **非决策点（直道）**：除来路方向外，可通行方向 = 1。系统自动沿唯一方向前进。
@@ -96,7 +103,7 @@ get_auto_direction(pos: Vector2i, last_dir: MoveDirection) -> MoveDirection:
   return NONE                              # 非直道：需要决策
 ```
 
-特殊情况：Agent 初始位置（比赛刚开始，`last_dir = NONE`）不视为直道，必须请求 LLM 决策。
+特殊情况：Agent 初始位置（比赛刚开始，`last_dir = NONE`）不执行直道自动前进逻辑——on_tick() 中的首 tick 显式分支在调用 `get_auto_direction` 之前已触发 API 请求。
 
 ### API 调用流程
 
@@ -163,11 +170,14 @@ AgentBrain:
   request_state: RequestState          # API 请求状态
   pending_response: String             # 最新的待处理 API 响应文本（null = 无）。HTTPRequest 回调中写入，on_tick() 开始时检查并消费
 
-  # --- API 配置 ---
+  # --- API 配置（initialize 时从 MatchConfig.llm_config_a/b 写入）---
   api_endpoint: String                 # OpenAI 兼容 API 地址
   api_key: String                      # API Key
   model: String                        # 模型名称（如 "gpt-4o", "claude-3-sonnet"）
   api_timeout: float                   # 请求超时时间（秒）
+  temperature: float                   # LLM 采样温度
+  max_tokens: int                      # LLM 最大返回 token 数
+  max_queue_length: int                # 路径队列上限
 
   # --- 会话数据 ---
   system_message: String               # 比赛开始时构建，全程不变
@@ -190,7 +200,7 @@ LLMAgentManager:
   signal auto_advance(agent_id, direction)    # 直道自动前进
 
   # --- 生命周期 ---
-  initialize(config: MatchConfig)      # 赛前初始化：创建 Brain，构建 system message
+  initialize(config: MatchConfig)      # 赛前初始化：从 config.llm_config_a/b 读取 API 配置写入各 AgentBrain，从 config.prompt_a/b 构建 system message
   on_tick(tick_count: int)             # 每 tick 的核心处理逻辑
   reset()                             # 清空所有 Brain 数据
 
@@ -212,7 +222,8 @@ LLMAgentManager:
 | **Grid Movement** | Movement → Agent | `mover_blocked` 信号 | 撞墙 → 清空 path_queue，发起新 API 请求 |
 | **Maze Data Model** | Agent → Model | `get_shortest_path()`, `can_move()` | A* 寻路和决策点判断（通过遍历 4 方向 `can_move()` 获取可通行方向列表） |
 | **Fog of War** | Agent → FoW | `get_cell_visibility(agent_id, x, y)`, `get_visible_cells(agent_id)` | 验证目标坐标在已知区域内；检查新目标是否出现在视野中 |
-| **Key Collection** | Keys → Agent | `key_collected` 信号 | 收集钥匙后，下一个目标变更 → 可能触发新 API 请求 |
+| **Key Collection** | Keys → Agent | `key_collected` 信号, `key_activated` 信号 | `key_collected(agent_id, key_type)`：该 Agent 拾取钥匙后进度变更，触发新 API 请求（目标可能改变）。`key_activated(key_type)`：新钥匙全局首次激活，检查是否在视野内触发决策 |
+| **Win Condition / Chest** | WinCon → Agent | `chest_activated` 信号 | 宝箱从 Inactive 变为 Active 后发出，检查宝箱是否在视野内触发决策。不监听 `chest_unlocked`（时序不安全）。LLM Agent 的移动间接触发 Win Condition 检查（通过 Grid Movement 的 `mover_moved` 信号） |
 | **Match HUD** | HUD → Agent | `get_api_call_count()`, `get_idle_tick_count()` | 显示 API 调用统计 |
 | **Result Screen** | Result → Agent | `get_api_call_count()`, `total_tokens_used` | 赛后统计展示 |
 
@@ -275,7 +286,7 @@ avg_queue_length = total_queue_steps / total_api_calls
 
 | Scenario | Expected Behavior | Rationale |
 |----------|------------------|-----------|
-| 比赛开始第一个 tick（Agent 无移动历史，`last_dir = NONE`） | 不视为直道，发起 API 请求，原地等待响应 | 初始位置可能是岔路口也可能是走廊，但没有"来路"无法判断前进方向，必须让 LLM 做第一个决策 |
+| 比赛开始第一个 tick（Agent 无移动历史，`last_dir = NONE`） | 不视为直道，也不走决策点分类逻辑——显式分支检测 `last_move_direction == NONE`，直接发起 API 请求，原地等待响应 | 初始位置的出口数量不确定（角落可能只有 1 个出口，既不是"直道"也不是传统"岔路口/死胡同"），用显式分支避免分类歧义。Maze Generator 保证 Spawn 在角落，角落在完美迷宫中可能只有 1 个出口但缺少"来路"信息无法判断前进方向 |
 | LLM 返回的 target 坐标指向 unknown cell（迷雾未探索区域） | 验证失败，等同于 NONE。不更新 path_queue，标记 request_state = IDLE，下一个决策点重新请求 | 不允许 Agent 利用未知信息。LLM 只能指向 visible 或 explored 的 cell |
 | LLM 返回的 target 是当前位置 `{"target": [5, 3]}`（Agent 就在 (5,3)） | 验证失败，等同于 NONE | 原地不动无意义，浪费一次 API 调用。LLM 应该选择一个要去的地方 |
 | LLM 返回的 target 可达但路径很长（穿越大片 explored 区域，20+ 步） | 正常生成 path_queue。路径队列安全上限 `max_queue_length`（默认 20），超出部分截断 | 战争迷雾天然限制了路径长度，但 explored 区域可能很大。截断防止 Agent 执行基于过时信息的超长路径，截断点自然成为新决策点 |
@@ -286,7 +297,7 @@ avg_queue_length = total_queue_steps / total_api_calls
 | API 返回格式正确但 JSON 解析失败（LLM 返回非 JSON 文本） | 由 LLM Information Format 的 `parse_response()` 处理，返回 NONE | 职责分离：解析逻辑在 LLM Information Format，本系统只消费解析结果 |
 | 两个 Agent 的 API 请求同时发出 | 各自独立的 HTTPRequest 节点，互不阻塞。Godot 的 HTTPRequest 是异步的 | 每个 AgentBrain 有自己的 HTTPRequest 实例，完全独立 |
 | 比赛结束（FINISHED）时仍有 in-flight API 请求 | 取消请求（HTTPRequest.cancel_request()），标记 IDLE，清空 path_queue | 比赛已结束，不需要消费响应。避免响应在下一场比赛中被错误处理 |
-| Agent 在走旧路径的过程中收集了钥匙 | Key Collection 发出 `key_collected` 信号 → LLM Agent Manager 收到后，若当前无 in-flight 请求，发起新 API 请求（不清空队列）。新响应到达后替换队列 | 收集钥匙后目标改变（下一把钥匙或宝箱），需要让 LLM 基于新目标重新决策 |
+| Agent 在走旧路径的过程中收集了钥匙 | Key Collection 发出 `key_collected(agent_id, key_type)` 信号 → LLM Agent Manager 收到后，若 `agent_id` 匹配且当前无 in-flight 请求，发起新 API 请求（不清空队列）。新响应到达后替换队列 | 收集钥匙后该 Agent 的目标改变（下一把钥匙或宝箱），需要让 LLM 基于新目标重新决策。注意：此处依赖 `key_collected`（每次个人拾取都发），不是 `key_activated`（全局首次激活） |
 | 直道自动前进走进了死胡同 | 死胡同是决策点 → 发起 API 请求，原地等待（队列为空，且非直道） | 死胡同只有来路一个方向，不属于"直道"（直道定义要求除来路外有恰好 1 个前进方向） |
 | LLM 返回 `{"direction": "NORTH"}` 而非 target 坐标 | 降级处理：生成长度为 1 的 path_queue，执行单步移动。下一个 tick 重新评估是否需要决策 | 兼容旧格式，不惩罚使用单方向格式的 LLM。但效率较低（几乎每步都需要 API 调用） |
 | 预发起的 API 请求还没回来，Agent 又到达了另一个决策点 | 不发起新请求（已有 in-flight）。Agent 继续走队列或自动前进。响应到达后从最新位置重新寻路 | 同一时间只允许一个 in-flight 请求，避免 API 浪费和响应竞争 |
@@ -301,10 +312,10 @@ avg_queue_length = total_queue_steps / total_api_calls
 | **LLM Information Format** | Agent depends on this | 调用 `build_system_message()` 构建赛前固定 prompt，调用 `build_state_message()` 构建每次决策时的状态描述，调用 `parse_response()` 解析 LLM 返回的目标坐标或方向 |
 | **Grid Movement** | Agent depends on this | 调用 `set_direction()` 写入每 tick 的移动方向（队列消费或自动前进）；监听 `mover_moved` 信号更新 `last_move_direction` 和检查决策点；监听 `mover_blocked` 信号触发重新决策 |
 | **Match State Manager** | Agent depends on this | 监听 `tick` 信号驱动 `on_tick()` 决策循环；监听 `state_changed` 信号管理生命周期（COUNTDOWN 初始化，FINISHED 清理） |
-| **Maze Data Model** | Agent depends on this | 调用 `get_shortest_path()` 执行 A* 寻路生成路径队列；调用 `get_open_directions()` 判断决策点；调用 `can_move()` 验证路径合法性 |
+| **Maze Data Model** | Agent depends on this | 调用 `get_shortest_path()` 执行 A* 寻路生成路径队列；遍历 4 个方向调用 `can_move()` 获取可通行方向列表来判断决策点（Maze Data Model 不提供 `get_open_directions()` 接口，由本系统自行组装） |
 | **Fog of War** | Agent depends on this | 调用 `get_cell_visibility()` 验证 LLM 返回的目标坐标在已知区域（visible/explored）内；检测视野内新目标出现触发决策 |
-| **Key Collection** | Agent depends on this | 监听 `key_collected` 信号，收集钥匙后触发新的 API 请求（目标可能改变） |
-| **Win Condition / Chest** | WinCon depends on this（间接） | LLM Agent 的移动最终触发 Win Condition 检查（通过 Grid Movement 的 `mover_moved` 信号） |
+| **Key Collection** | Agent depends on this | 监听 `key_collected(agent_id, key_type)` 信号，该 Agent 拾取钥匙后进度变更，触发新 API 请求（目标改变）；监听 `key_activated(key_type)` 信号，新钥匙全局首次激活时检查是否在视野内触发决策 |
+| **Win Condition / Chest** | Agent depends on this | 监听 `chest_activated` 信号，宝箱变为 Active 后检查是否在视野内触发决策。不监听 `chest_unlocked`——`chest_unlocked` 到达时宝箱可能尚未 Active（Phase 3 处理顺序不确定），导致 prompt 中遗漏宝箱信息 |
 | **Match HUD** | HUD depends on this | 查询 `get_api_call_count()` / `get_idle_tick_count()` 显示 API 调用和等待统计 |
 | **Result Screen** | Result depends on this | 赛后查询 `total_api_calls` / `total_tokens_used` / `total_idle_ticks` 展示 AI 决策统计 |
 | **Observer Communication（Core 阶段）** | Observer depends on this | 未来的观察者通信系统可能需要与 Agent 的决策循环协调（如观察者消息打断 Agent 队列） |
@@ -325,12 +336,12 @@ avg_queue_length = total_queue_steps / total_api_calls
 - `api_timeout` 和 `temperature` 是影响 Agent 行为最直观的参数。timeout 影响"Agent 停顿多久"，temperature 影响"Agent 有多果断"
 - `model` 允许玩家选择不同模型进行对战，这本身就是游戏趣味点之一（便宜快速模型 vs 昂贵智能模型）
 - 两个 Agent 的所有参数独立配置——允许一个用 GPT-4o 另一个用 Claude 3.5 Sonnet
-- 所有值必须从配置文件读取，禁止硬编码
+- 所有值必须从配置文件读取（通过 `MatchConfig.llm_config_a/b` 传入），禁止硬编码
 
 ## Acceptance Criteria
 
 ### 路径队列与移动
-- [ ] 比赛开始后第一个 tick，Agent 发起 API 请求并原地等待
+- [ ] 比赛开始后第一个 tick（`last_move_direction == NONE`），无论出生点通行结构如何（即使只有 1 个出口），Agent 发起 API 请求并原地等待（显式首 tick 分支，不依赖决策点分类）
 - [ ] API 响应包含合法 target 坐标时，从当前位置 A* 寻路生成 path_queue
 - [ ] 每个 tick 从 path_queue 头部消费一个方向，调用 `GridMovement.set_direction()`
 - [ ] path_queue 消费完毕后，若当前位置是直道，自动沿唯一前进方向移动（不调用 API）
@@ -382,7 +393,8 @@ avg_queue_length = total_queue_steps / total_api_calls
 - [ ] A* 寻路生成 path_queue 在 5ms 内完成（50x50 迷宫）
 
 ### 配置
-- [ ] 所有参数（api_endpoint, api_key, model, api_timeout, temperature, max_tokens, max_queue_length）从外部配置文件读取，禁止硬编码
+- [ ] 所有参数（api_endpoint, api_key, model, api_timeout, temperature, max_tokens, max_queue_length）通过 `MatchConfig.llm_config_a/b` 传入（`MatchConfig` 从外部配置文件读取），禁止硬编码
+- [ ] `initialize(config: MatchConfig)` 从 `config.llm_config_a` 构造 Agent A 的 Brain，从 `config.llm_config_b` 构造 Agent B 的 Brain，两个 Agent 可配置不同的 provider/model
 
 ## Action Items
 
