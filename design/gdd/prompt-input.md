@@ -52,8 +52,8 @@ Match 场景采用固定三栏布局，**全程不变**——从 SETUP 到 PLAYI
 | **SETUP — P1 输入** | Prompt 输入界面（活跃） | 迷宫 God View | 等待提示 "Waiting for Player 1..." |
 | **SETUP — P2 输入** | P1 已 Ready 提示 ✓ | 迷宫 God View | Prompt 输入界面（活跃） |
 | **COUNTDOWN** | "Ready!" | 迷宫 + 3-2-1-GO | "Ready!" |
-| **PLAYING** | Agent A 局部视野 / 状态（由 Match Renderer / HUD 接管） | 迷宫 God View | Agent B 局部视野 / 状态（由 Match Renderer / HUD 接管） |
-| **FINISHED** | Agent A 赛后统计（由 Result Screen 接管） | 迷宫最终状态 | Agent B 赛后统计（由 Result Screen 接管） |
+| **PLAYING** | Agent A 钥匙进度 + 状态信息（由 Match HUD 接管） | 迷宫 God View | Agent B 钥匙进度 + 状态信息（由 Match HUD 接管） |
+| **FINISHED** | —（立即切换到 Result 场景，不在 Match 场景停留） | — | — |
 
 **布局约束**：
 - 中栏宽度固定 ~60%，迷宫在其中居中渲染，不受左右栏影响
@@ -177,18 +177,14 @@ char_count = prompt_text.length()
 |--------|-----------|---------------------|
 | **Match State Manager** | Prompt Input depends on this | 监听 `state_changed` 信号控制显示/隐藏。SETUP 阶段显示 prompt 输入界面，离开 SETUP 时隐藏。调用 `start_countdown()` 提交 prompt 并启动倒计时。写入 `MatchConfig.prompt_a` / `prompt_b` |
 | **Scene Manager** | Scene Manager loads this（间接） | Prompt Input 是 Match 场景的子节点，随 Match 场景实例化/销毁。不直接调用 Scene Manager API |
-| **Match Renderer** | 共享三栏布局容器 | Prompt Input 在 SETUP 阶段管理左右栏内容，PLAYING 阶段由 Match Renderer 接管左右栏显示 Agent 局部视野。两者通过 Match State Manager 的 `state_changed` 信号协调切换时机 |
-| **Match HUD** | 共享三栏布局容器 | Match HUD 在 PLAYING 阶段使用左右栏显示钥匙进度、API 状态等信息，与 Match Renderer 的局部视野共存。Prompt Input 隐藏后 HUD 接管 |
-| **Result Screen** | 共享三栏布局容器 | FINISHED 阶段 Result Screen 使用左右栏显示赛后统计。注意：当前设计中 Result 是独立场景（Scene Manager GDD），若改为 Match 场景内的 overlay 则共享三栏，否则不共享 |
+| **Match Renderer** | 共享三栏布局容器 | Prompt Input 在 SETUP 阶段管理左右栏内容，PLAYING 阶段 Match Renderer 在中栏渲染 God View。两者通过 Match State Manager 的 `state_changed` 信号协调切换时机 |
+| **Match HUD** | 共享三栏布局容器 | Match HUD 在 PLAYING 阶段使用左右栏显示钥匙进度和状态信息。Prompt Input 隐藏后 HUD 接管左右栏 |
+| **Result Screen** | 独立场景，不共享三栏 | FINISHED 阶段 Match 根脚本立即切换到独立的 Result 场景。Result Screen 有自己的三栏布局（见 result-screen.md） |
 | **Maze Generator** | 无直接依赖 | Maze Generator 在 SETUP 阶段早期生成迷宫，Prompt Input 在迷宫生成完毕后显示。两者都监听 Match State Manager 信号，无直接交互 |
 | **LLM Agent Integration** | Agent 间接依赖 Prompt Input | Prompt Input 写入 `MatchConfig.prompt_a/b`，LLM Agent Integration 在 `initialize()` 时读取这些 prompt 构建 system message。两者通过 MatchConfig 数据传递，无直接引用 |
 | **(无上游依赖)** | — | Prompt Input 仅依赖 Match State Manager（Foundation 层）。不依赖任何 Gameplay 或 AI 系统 |
 
-**关于 Result Screen 的说明**：Scene Manager GDD 定义 Result 为独立场景（Match ↔ Result 切换）。但三栏布局规范暗示 FINISHED 阶段仍在 Match 场景内使用左右栏。这存在两种实现路径：
-1. Result 仍为独立场景，三栏布局在 Result 场景中重新创建（与 Match 场景相同的栏位结构）
-2. Result 改为 Match 场景内的 overlay，复用同一套三栏容器
-
-此决策留待 Result Screen GDD 设计时确定。Prompt Input 系统不受此影响。
+**关于 Result Screen 的说明**：Result 是独立场景（Scene Manager GDD 确认），Match 根脚本收到 `match_finished` 后立即切换到 Result 场景。FINISHED 阶段不在 Match 场景停留，三栏布局不需要为 FINISHED 阶段准备内容。Result Scene 有自己独立的三栏布局实例。
 
 ## Tuning Knobs
 
