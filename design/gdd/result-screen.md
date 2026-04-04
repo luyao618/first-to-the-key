@@ -181,6 +181,34 @@ display = "{minutes}:{seconds:02d}"
 - Agent 颜色应与 Match Renderer 的 `agent_a_color` / `agent_b_color` 保持一致，建议从同一配置源读取
 - 所有值从配置文件读取，禁止硬编码
 
+## Visual/Audio Requirements
+
+Result Screen 是所有终局视觉和音效的唯一 owner。Match Renderer 不播放终局动画（FINISHED 阶段立即切换到本场景），因此胜负展示、超时提示等终局表现全部在此处定义。
+
+### Visual
+
+| Element | Description | Priority |
+|---------|-------------|----------|
+| **结果标题动画** | "Player N Wins!" / "Draw!" 从中央弹入（缩放 0→1 + ease-out），胜利者颜色脉冲发光 | MVP |
+| **胜利者高亮** | 胜利者 Agent 标识在左/右栏顶部放大 + 脉冲发光动画。失败者标识灰显半透明 | MVP |
+| **超时平局标识** | 平局时中栏标题下方显示 "TIME UP" 副标题（中性色），双方栏位无胜/败标记 | MVP |
+| **统计数字滚入** | API 调用、Token 消耗、空转率等数字从 0 滚动到最终值（计数动画，约 0.5-1.0 秒） | Nice-to-have |
+| **钥匙进度图标** | 复用 Match HUD 的钥匙槽图标样式（灰色/彩色），直接显示最终进度 | MVP |
+
+### Audio
+
+| Event | Audio Feedback | Priority |
+|-------|---------------|----------|
+| 场景加载（正常胜利） | 胜利音乐旋律（欢快、短促，约 2-3 秒） | MVP |
+| 场景加载（超时平局） | 平局音效（中性、略沉闷，约 1-2 秒） | MVP |
+| 结果标题弹入 | 短促冲击音效，配合缩放动画 | MVP |
+| 点击 Rematch | 确认音效（清脆） | MVP |
+
+**设计说明**：
+- Result Screen 是终局表现的**唯一 owner**——Match Renderer 在 `chest_opened` 信号后可能启动宝箱开启动画的前几帧，但场景随即切换，完整的终局仪式感由本场景提供
+- 胜利/平局的音效和视觉必须在 `_ready()` 后立即触发，给玩家即时的结果反馈
+- 所有动画使用 Godot Tween 实现，时长从配置文件读取
+
 ## Acceptance Criteria
 
 ### 数据读取
@@ -218,3 +246,8 @@ display = "{minutes}:{seconds:02d}"
 
 ### 配置
 - [ ] 所有参数（panel_ratio、字体大小、颜色）从外部配置文件读取，禁止硬编码
+
+### 终局表现
+- [ ] 正常胜利时播放胜利音乐和结果标题弹入动画
+- [ ] 超时平局时显示 "TIME UP" 副标题，播放平局音效
+- [ ] 胜利者栏位有高亮/脉冲动画，失败者栏位灰显
