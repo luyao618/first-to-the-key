@@ -40,13 +40,30 @@ enum MatchState { SETUP, COUNTDOWN, PLAYING, FINISHED }
 enum GameMode { AGENT_VS_AGENT, PLAYER_VS_AGENT, PLAYER_VS_PLAYER }
 enum MatchResult { NONE, PLAYER_A_WIN, PLAYER_B_WIN, DRAW }
 
+AgentLLMConfig:
+  api_endpoint: String             # OpenAI 兼容 API 地址（如 "https://api.openai.com/v1/chat/completions"）
+  api_key: String                  # API Key
+  model: String                    # 模型名称（如 "gpt-4o", "claude-3-sonnet"）
+  api_timeout: float               # 请求超时时间（秒），默认 10.0
+  temperature: float               # LLM 采样温度，默认 0.3
+  max_tokens: int                  # LLM 最大返回 token 数，默认 50
+  max_queue_length: int            # 路径队列上限，默认 20
+
 MatchConfig:
   game_mode: GameMode              # 当前比赛模式
   prompt_a: String                 # 玩家 A 的 prompt（Agent 模式）
   prompt_b: String                 # 玩家 B 的 prompt（Agent 模式）
+  llm_config_a: AgentLLMConfig     # Agent A 的 LLM API 配置（从外部配置文件读取）
+  llm_config_b: AgentLLMConfig     # Agent B 的 LLM API 配置（从外部配置文件读取）
   maze_width: int                  # 迷宫宽度（传递给 Maze Generator）
   maze_height: int                 # 迷宫高度
   vision_strategy: VisionStrategy  # 视野策略（传递给 Fog of War）— 由 game_mode 自动决定，不由玩家配置
+
+# AgentLLMConfig 来源：
+#   start_setup() 从外部配置文件（如 settings.cfg / match_config.json）读取 LLM 配置，
+#   填充 llm_config_a 和 llm_config_b。两个 Agent 可独立配置不同的 provider / model。
+#   Prompt Input 系统不管理这些值——它只负责收集 prompt 文本。
+#   LLM Agent Integration 的 initialize(config) 从 config.llm_config_a/b 读取并写入 AgentBrain。
 
 # game_mode → vision_strategy 映射规则（在 start_setup() 中自动设置）：
 #   AGENT_VS_AGENT     → PATH_REACH      (LLM Agent 使用路径可达感知)
