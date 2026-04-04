@@ -9,7 +9,7 @@
 
 ## Overview
 
-LLM Agent Integration 是连接 LLM API 与游戏运行时的**决策引擎**。它为每个 Agent 维护一个独立的决策循环：在需要决策时（岔路口、死胡同、队列耗尽、新目标出现），向 LLM API 发送由 LLM Information Format 构建的 prompt，接收 LLM 返回的响应并通过 `parse_response()` 解析为 `ParseResult`（目标坐标优先，单步方向降级，解析失败为 NONE）。目标坐标通过 Maze Data Model 的 A* 寻路生成路径队列（path queue），每个 tick 从队列中消费一步交给 Grid Movement 执行。
+LLM Agent Integration 是连接 LLM API 与游戏运行时的**决策引擎**，作为 **Godot Autoload**（全局单例，名称 `LLMAgentManager`）注册，生命周期贯穿整个应用——场景切换后 API 统计数据仍可读取（Result Screen 在独立场景中读取 API 调用次数、token 消耗等），`reset()` 或下一局 `initialize()` 时才清空。它为每个 Agent 维护一个独立的决策循环：在需要决策时（岔路口、死胡同、队列耗尽、新目标出现），向 LLM API 发送由 LLM Information Format 构建的 prompt，接收 LLM 返回的响应并通过 `parse_response()` 解析为 `ParseResult`（目标坐标优先，单步方向降级，解析失败为 NONE）。目标坐标通过 Maze Data Model 的 A* 寻路生成路径队列（path queue），每个 tick 从队列中消费一步交给 Grid Movement 执行。
 
 本系统的关键设计决策是**路径队列 + 智能触发**模式：LLM 不需要每个 tick 都做决策，而是返回一个目标坐标，系统自动规划路径并连续执行。Agent 在直道上自动前进（不消耗 API 调用），只在到达决策点时才请求新的 LLM 决策。新的 API 请求在到达决策点时**预发起**，Agent 继续沿旧路径行进，API 响应到达后用新路径替换旧队列——这确保 Agent 全程保持移动，几乎不会因为 API 延迟而停顿。
 
@@ -205,6 +205,8 @@ LLMAgentManager:
   initialize(config: MatchConfig)      # 赛前初始化：从 config.llm_config_a/b 读取 API 配置写入各 AgentBrain，从 config.prompt_a/b 构建 system message
   on_tick(tick_count: int)             # 每 tick 的核心处理逻辑
   reset()                             # 清空所有 Brain 数据
+  # 注意：LLMAgentManager 是 Autoload，FINISHED 后 API 统计数据（total_api_calls, total_tokens_used, total_idle_ticks）
+  # 保持可读（Result Screen 跨场景读取），直到下一局 initialize() 或显式 reset() 才清空
 
   # --- 查询接口 ---
   get_brain(agent_id) -> AgentBrain

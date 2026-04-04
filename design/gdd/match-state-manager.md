@@ -88,7 +88,7 @@ MatchStateManager:
 
   # --- 状态转移接口 ---
   start_setup(config: MatchConfig)  # 进入 Setup，加载配置
-  start_countdown()                 # Setup -> Countdown
+  start_countdown() -> bool          # Setup -> Countdown（返回 true 成功，false 表示前置条件不满足如迷宫未就绪）
   start_playing()                   # Countdown -> Playing，启动 tick 计时器
   finish_match(result, winner_id)   # Playing -> Finished，停止 tick，记录结果
   reset()                           # 任意状态 -> Setup，重置所有数据
@@ -208,7 +208,7 @@ countdown_remaining = countdown_duration - (current_time - countdown_start_time)
 | `finish_match()` 在 Countdown 状态被调用 | 操作被忽略，打印警告日志。只有 Playing 状态可以结束比赛 | 比赛还没开始就不可能结束 |
 | Tick 计时器在 LLM API 延迟期间继续触发 | 正常触发 tick 信号。Agent 若无响应则原地等待（由 LLM Agent Integration 处理） | Tick 是全局心跳，不因单个 Agent 的延迟而暂停 |
 | 连续快速调用 `reset()` + `start_setup()` | 每次 `reset()` 完整清理状态后再执行 `start_setup()`，不会产生残留数据 | 支持快速重赛场景 |
-| 迷宫未就绪时调用 `start_countdown()` | 操作被忽略，打印警告日志 `"Cannot start countdown: MazeData not finalized"` | Setup -> Countdown 的前置条件要求 MazeData 已 finalized，防止在迷宫未生成完成时开赛 |
+| 迷宫未就绪时调用 `start_countdown()` | 返回 `false`，打印警告日志 `"Cannot start countdown: MazeData not finalized"`。**调用方（Prompt Input）应处理返回值**——显示等待提示，在 `maze_generated` 信号到达后重试 | Setup -> Countdown 的前置条件要求 MazeData 已 finalized，防止在迷宫未生成完成时开赛。返回 bool 而非静默忽略，确保调用方可以做出反应 |
 
 ## Dependencies
 
@@ -252,7 +252,7 @@ countdown_remaining = countdown_duration - (current_time - countdown_start_time)
 ## Acceptance Criteria
 
 - [ ] 状态机初始状态为 SETUP
-- [ ] `start_countdown()` 仅在 SETUP 状态有效，其他状态调用被忽略并打印警告
+- [ ] `start_countdown()` 仅在 SETUP 状态且 MazeData 已 finalized 时有效，返回 `true`。前置条件不满足时返回 `false` 并打印警告
 - [ ] `start_playing()` 仅在 COUNTDOWN 状态有效
 - [ ] `finish_match()` 仅在 PLAYING 状态有效
 - [ ] `reset()` 在任意状态均有效，重置后状态为 SETUP

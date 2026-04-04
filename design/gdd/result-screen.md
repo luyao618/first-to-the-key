@@ -2,7 +2,7 @@
 
 > **Status**: Approved
 > **Author**: design-system agent
-> **Last Updated**: 2026-04-02
+> **Last Updated**: 2026-04-04
 > **System Index**: #14
 > **Layer**: Presentation
 > **Implements Pillar**: Simple Rules Deep Play
@@ -11,7 +11,7 @@
 
 Result Screen 是比赛结束后的**独立场景**，展示胜负结果、比赛统计和双方 prompt，并提供重赛或退出的操作入口。当 Match State Manager 进入 FINISHED 状态后，Match 场景根脚本调用 `SceneManager.go_to("result")` 跳转至本场景。
 
-Result Screen 复用 Prompt Input 定义的**三栏布局**（左 ~20% / 中 ~60% / 右 ~20%），保持视觉一致性——左栏展示 Agent A 的详细统计（API 调用、token 消耗、空转率、钥匙进度、prompt 文本），右栏展示 Agent B 的对应数据，中栏展示核心结果（胜负标题、比赛用时、tick 数）和操作按钮（Rematch / Quit）。所有数据从 Match State Manager 和 LLM Agent Integration 的 Autoload 实例中读取——这些 Autoload 在场景切换后仍保留数据（`reset()` 在玩家点击 Rematch 时才调用）。
+Result Screen 复用 Prompt Input 定义的**三栏布局比例**（左 ~20% / 中 ~60% / 右 ~20%），但作为独立场景拥有自己的三栏容器实例（从同一配置源读取 `panel_ratio`，保持视觉一致性）——左栏展示 Agent A 的详细统计（API 调用、token 消耗、空转率、钥匙进度、prompt 文本），右栏展示 Agent B 的对应数据，中栏展示核心结果（胜负标题、比赛用时、tick 数）和操作按钮（Rematch / Quit）。所有数据从 Autoload 系统读取：`MatchStateManager`（结果、配置、用时）、`LLMAgentManager`（API 统计）、`KeyCollection`（钥匙进度）——这三个 Autoload 在场景切换后仍保留数据（`reset()` 在玩家点击 Rematch 时才调用）。
 
 MVP 阶段仅支持 Agent vs Agent 模式的结果展示，不支持回放功能。设计目标是让玩家在 5 秒内理解"谁赢了、为什么"，然后自然地点击 Rematch 调整 prompt 再来一局。
 
@@ -28,7 +28,7 @@ MVP 阶段仅支持 Agent vs Agent 模式的结果展示，不支持回放功能
 ### Core Rules
 
 1. Result Screen 是一个**独立 Godot 场景**（`result.tscn`），由 Scene Manager 加载/卸载
-2. `_ready()` 时从 Autoload 系统读取所有数据：`MatchStateManager`（结果、配置、用时）和 `LLMAgentManager`（API 统计）
+2. `_ready()` 时从 Autoload 系统读取所有数据：`MatchStateManager`（结果、配置、用时）、`LLMAgentManager`（API 统计）、`KeyCollection`（钥匙进度）
 3. 数据读取是**一次性的**——`_ready()` 中完成全部读取并填充 UI，之后不再查询上游系统
 4. 复用 Prompt Input 定义的三栏布局比例（左 ~20% / 中 ~60% / 右 ~20%）
 
