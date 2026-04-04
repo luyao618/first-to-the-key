@@ -2,7 +2,7 @@
 
 > **Status**: Approved
 > **Author**: design-system agent
-> **Last Updated**: 2026-04-03
+> **Last Updated**: 2026-04-04
 > **System Index**: #8
 > **Layer**: Feature
 > **Implements Pillar**: Human-AI Symbiosis, Information Trade-off, Simple Rules Deep Play
@@ -28,7 +28,7 @@ LLM Information Format 是玩家不会直接看到的系统——但它决定了
 1. LLM Information Format 是一个**无状态转换器**——每次调用 `build_state_message()` 时从上游系统实时读取数据，不缓存任何跨调用的状态
 2. LLM Agent Integration 在**决策点**（而非每个 tick）为每个 Agent 调用 `build_state_message(agent_id)` 获取完整的 state message，发送给 LLM API。决策点包括：岔路口、死胡同、视野内新目标出现、撞墙等（详见 `llm-agent-integration.md` 决策点定义）。直道自动前进不触发 API 调用
 3. LLM 的文本响应通过 `parse_response(text)` 解析。**主格式**为目标坐标 `{"target": [x, y]}`，由 LLM Agent Integration 进行 A* 寻路生成路径队列。**降级格式**为单方向 `{"direction": "NORTH"}`，生成长度为 1 的路径队列。任何无法解析为合法目标或方向的响应，等同于 `NONE`（原地不动）
-4. **信息边界严格遵循 Fog of War 和 Marker 激活状态**：只有 `VISIBLE` 状态的 cell 会包含标记信息（钥匙/宝箱），`EXPLORED` cell 仅包含墙壁结构，`UNKNOWN` cell 完全不出现在 prompt 中。**Marker 激活过滤由本系统负责**——FoW 只提供 cell 可见性，不判断 marker 是否 Active。`build_state_message()` 在构建 Visible cells 列表时，必须对每个 cell 的 markers 执行以下过滤：
+4. **信息边界严格遵循 Fog of War 和 Marker 激活状态**：只有 `VISIBLE` 状态的 cell 会包含标记信息（钥匙/宝箱），`EXPLORED` cell 仅包含墙壁结构，`UNKNOWN` cell 完全不出现在 prompt 的结构化列表（Visible/Explored/Visited）中。ASCII 地图中使用 `?` 标记视野边界外的 cell 作为空间参照，但不包含任何结构或标记信息。**Marker 激活过滤由本系统负责**——FoW 只提供 cell 可见性，不判断 marker 是否 Active。`build_state_message()` 在构建 Visible cells 列表时，必须对每个 cell 的 markers 执行以下过滤：
    - 钥匙 marker：仅在 `KeyCollection.is_key_active(key_type)` 为 true 时包含
    - 宝箱 marker：仅在 `WinCondition.is_chest_active()` 为 true 时包含
    - 不满足条件的 marker 从 prompt 中完全排除，等效于该 cell 上不存在标记
@@ -75,7 +75,7 @@ RULES:
 - You move one cell per turn in a cardinal direction: NORTH, EAST, SOUTH, or WEST.
 - You can only move in directions without walls. Moving into a wall wastes your turn.
 - You have limited vision: you can see cells within {vision_radius} steps along open paths from your position.
-- "Visible" cells show walls AND items (keys, chest). "Explored" cells show walls only (you visited before but can't currently see items there).
+- "Visible" cells show walls AND items (keys, chest). "Explored" cells show walls only (you saw them before but can't currently see items there).
 - Keys must be collected in order. You can only pick up the key matching your current progress.
 - You share the maze with an opponent agent. First to open the chest wins.
 
@@ -113,8 +113,8 @@ EXPLORED CELLS (walls only, items may have changed):
 VISITED (cells you have been to):
 {visited_list}
 
-OBJECTIVE: Find {current_key_name} key
-Keys collected: {keys_collected}/{keys_total}
+OBJECTIVE: {objective_text}
+Keys collected: {keys_collected}/3
 ```
 
 ### ASCII Map Format
@@ -265,18 +265,18 @@ LLMInformationFormat:
   maze: MazeData
   fog: FogOfWar
   movement: GridMovementManager
-  keys: KeyCollection              # 查询钥匙进度和激活状态（is_key_active）
+  keys: KeyCollection              # 查询钥匙进度（get_agent_progress）和激活状态（is_key_active）
   win_condition: WinCondition      # 查询宝箱激活状态（is_chest_active）
 
   # --- 配置 ---
   include_ascii_map: bool          # 是否在 State Message 中包含 ASCII 地图（默认 false）
   include_explored: bool           # 是否包含 Explored cells 列表（默认 true）
   max_visited_count: int           # visited 列表最多显示多少个（默认 20，防止 token 膨胀）
-  max_explored_count: int          # Explored cells 列表最多显示多少个（默认 30，按路径距离排序截断）
+  max_explored_count: int          # Explored cells 列表最多显示多少个（默认 30，按曼哈顿距离排序截断。不使用路径距离，因为 MazeData.get_shortest_path() 在完整迷宫上运行，会泄露 Agent 未知区域的路径信息，违反 FoW 信息边界）
 
   # --- 构建接口 ---
   build_system_message(player_prompt: String, vision_radius: int) -> String
-  build_state_message(agent_id: int, tick_count: int) -> String
+  build_state_message(agent_id: int) -> String    # tick_count 从 Match State Manager 的 get_tick_count() 内部读取，不作为参数传入
 
   # --- 解析接口 ---
   parse_response(text: String) -> ParseResult   # 返回 TARGET(pos) / DIRECTION(dir) / NONE
@@ -294,7 +294,7 @@ LLMInformationFormat:
 | **Maze Data Model** | Format → Model | `has_wall()`, `get_markers_at()`, `get_cell()` | 读取 Visible/Explored cells 的墙壁结构和标记 |
 | **Fog of War** | Format → FoW | `get_visible_cells(agent_id)`, `get_explored_cells(agent_id)`, `get_cell_visibility(agent_id, x, y)` | 决定哪些 cell 的信息可以发送给 LLM |
 | **Grid Movement** | Format → Movement | `get_position()`, `get_visited_cells()` | 获取 Agent 当前位置和已访问历史 |
-| **Key Collection** | Format → Keys | `get_current_target()`, `get_collected_count()`, `is_key_active()` | 获取当前需要收集的钥匙类型和已收集数量。**Marker 过滤**：`build_state_message()` 中用 `is_key_active(key_type)` 过滤 Inactive 钥匙，不将其包含在 Visible cells 的 marker 标注中 |
+| **Key Collection** | Format → Keys | `get_agent_progress(agent_id)`, `is_key_active()` | 获取 Agent 的钥匙进度（AgentKeyState 枚举），派生当前目标和已收集数量：NEED_BRASS→目标 Brass key/已收集 0，NEED_JADE→目标 Jade key/已收集 1，NEED_CRYSTAL→目标 Crystal key/已收集 2，KEYS_COMPLETE→目标宝箱/已收集 3。**Marker 过滤**：`build_state_message()` 中用 `is_key_active(key_type)` 过滤 Inactive 钥匙，不将其包含在 Visible cells 的 marker 标注中 |
 | **Win Condition / Chest** | Format → WinCon | `is_chest_active()` | **Marker 过滤**：`build_state_message()` 中用 `is_chest_active()` 过滤 Inactive 宝箱。FoW 不负责此过滤——本系统是 marker 激活过滤的执行者之一 |
 | **Match State Manager** | Format → MSM | `get_tick_count()` | 在 State Message 中包含当前 tick 编号 |
 
@@ -354,8 +354,8 @@ map_height = 2 * vision_radius + 1
 | LLM 返回多个 JSON 对象 | 提取第一个 `{...}` 块，忽略后续内容 | 取第一个决策，简单确定 |
 | LLM 返回的方向指向墙壁 | `parse_response()` 正常返回该方向。Grid Movement 的 `can_move()` 负责拒绝并记录撞墙 | 信息格式层不做合法性验证——那是 Grid Movement 的职责。分层清晰 |
 | Visible cells 为空（Agent 视野内只有自己脚下的 cell） | `VISIBLE CELLS` 区域只包含 Agent 当前位置一条记录。正常构建 prompt | vision_radius = 0 的极端情况，系统不需要特殊处理 |
-| Explored cells 数量巨大（Agent 已探索 50x50 迷宫的大部分） | Explored cells 列表按离 Agent 当前位置的路径距离排序，截断至 `max_explored_count` 条（默认 30）。提醒 LLM "showing nearest {n} of {total} explored cells" | 防止 token 膨胀超出 LLM 上下文窗口限制。优先显示距离近的（更可能与当前决策相关） |
-| Visited cells 数量巨大 | 截断至 `max_visited_count` 条（默认 20），保留最近访问的。提醒 LLM "showing last {n} of {total} visited" | 同上，最近访问的 cell 对避免重复访问更有价值 |
+| Explored cells 数量巨大（Agent 已探索 50x50 迷宫的大部分） | Explored cells 列表按离 Agent 当前位置的曼哈顿距离排序，截断至 `max_explored_count` 条（默认 30）。提醒 LLM "showing nearest {n} of {total} explored cells" | 防止 token 膨胀超出 LLM 上下文窗口限制。优先显示距离近的（更可能与当前决策相关）。使用曼哈顿距离而非路径距离，因为路径距离需要在完整迷宫上寻路，会间接泄露未知区域信息 |
+| Visited cells 数量巨大 | 截断至 `max_visited_count` 条（默认 20），保留最近首次到达的 N 个（首次访问时间倒序）。提醒 LLM "showing last {n} of {total} visited" | 同上，最近首次到达的 cell 对避免重复访问更有价值 |
 | 当前目标钥匙在 Explored 区域新出现（Jade Key 出现在 Agent 已经 Explored 但当前不 Visible 的 cell） | Prompt 不包含该钥匙位置信息（FoW 规则：Explored cell 不暴露标记）。Agent 必须重新探索才能发现 | 严格遵循 Fog of War 信息边界，不偷偷泄露 Agent 不应知道的信息 |
 | 玩家的 prompt 非常长（数千字符） | System Message 按原样包含玩家 prompt，不截断。如果总 token 超出 LLM 上下文限制，由 LLM Agent Integration 层处理（截断或报错） | 信息格式层不限制创意性输入。token 管理是 API 调用层的职责 |
 | 玩家的 prompt 为空 | System Message 的 `PLAYER STRATEGY` 区域为空。LLM 将使用默认行为导航 | 空 prompt 是合法的（Match State Manager GDD 已确认），信息格式层正常处理 |
@@ -369,7 +369,7 @@ map_height = 2 * vision_radius + 1
 | **Maze Data Model** | LLMFormat depends on this | 查询 `has_wall()`, `get_markers_at()`, `get_cell()` 读取 Visible/Explored cells 的墙壁结构和标记内容 |
 | **Fog of War** | LLMFormat depends on this | 查询 `get_visible_cells(agent_id)`, `get_explored_cells(agent_id)`, `get_cell_visibility(agent_id, x, y)` 确定哪些 cell 的信息可以发送给 LLM |
 | **Grid Movement** | LLMFormat depends on this | 查询 `get_position()` 获取 Agent 当前位置，查询 `get_visited_cells()` 获取已访问历史 |
-| **Key Collection** | LLMFormat depends on this | 查询 `get_current_target()` 获取当前需要收集的钥匙类型，查询 `get_collected_count()` 获取已收集数量，查询 `is_key_active(key_type)` 过滤 Visible cells 中的 Inactive 钥匙 marker（FoW 不负责此过滤） |
+| **Key Collection** | LLMFormat depends on this | 查询 `get_agent_progress(agent_id)` 获取 Agent 的钥匙进度（AgentKeyState 枚举），派生当前目标（NEED_BRASS→Brass key, NEED_JADE→Jade key, NEED_CRYSTAL→Crystal key, KEYS_COMPLETE→宝箱）和已收集数量（0/1/2/3），查询 `is_key_active(key_type)` 过滤 Visible cells 中的 Inactive 钥匙 marker（FoW 不负责此过滤） |
 | **Win Condition / Chest** | LLMFormat depends on this | 查询 `is_chest_active()` 过滤 Visible cells 中的 Inactive 宝箱 marker。查询 `get_chest_position()` 在宝箱 Active 且在视野内时序列化宝箱位置。FoW 不负责此过滤——marker 激活状态过滤是本系统和 Match Renderer 的职责 |
 | **Match State Manager** | LLMFormat depends on this | 查询 `get_tick_count()` 在 State Message 中包含当前 tick 编号 |
 | **LLM Agent Integration** | Agent depends on this | 调用 `build_system_message()`, `build_state_message()` 构建 prompt，调用 `parse_response()` 解析 LLM 返回 |
@@ -382,7 +382,7 @@ map_height = 2 * vision_radius + 1
 | `include_ascii_map` | false | true / false | 在 State Message 中包含局部 ASCII 地图，给 LLM 空间直觉辅助，但增加 ~100-200 tokens/次调用 | 仅使用坐标列表，token 更紧凑，LLM 需要纯粹依赖坐标推理空间关系 |
 | `include_explored` | true | true / false | 包含 Explored cells 的墙壁结构，帮助 LLM 利用已知地形做决策 | 省 token，但 LLM 失去对已探索区域的记忆（每次只看到当前视野） |
 | `max_visited_count` | 20 | 5 - 100 | 显示更多已访问历史，帮助 LLM 避免重复路径，但增加 token 消耗 | 减少 token，但 LLM 可能重复访问旧路径 |
-| `max_explored_count` | 30 | 10 - 200 | 显示更多已探索 cell 的结构，帮助 LLM 做全局规划 | 减少 token，LLM 只能基于当前视野和有限记忆做局部决策 |
+| `max_explored_count` | 30 | 10 - 200 | 显示更多已探索 cell 的结构，帮助 LLM 做全局规划（按曼哈顿距离排序截断） | 减少 token，LLM 只能基于当前视野和有限记忆做局部决策 |
 
 **注意事项**：
 
@@ -406,7 +406,7 @@ LLM Information Format 是纯数据转换系统，不直接产生视觉或音频
 
 ### Prompt 构建
 - [ ] `build_system_message(player_prompt, vision_radius)` 返回包含游戏规则、坐标系说明、输出格式要求和玩家 prompt 的完整 System Message
-- [ ] `build_state_message(agent_id, tick_count)` 返回包含当前位置、可通行方向、Visible cells、Explored cells、已访问历史和钥匙进度的完整 State Message
+- [ ] `build_state_message(agent_id)` 返回包含当前位置、可通行方向、Visible cells、Explored cells、已访问历史和钥匙进度的完整 State Message（tick_count 从 Match State Manager 内部读取）
 - [ ] State Message 中的坐标使用 `(x, y)` 格式，X 向右 Y 向下，与 Maze Data Model 一致
 - [ ] State Message 中 `Open directions` 仅列出 `MazeData.can_move()` 返回 true 的方向
 
@@ -434,8 +434,8 @@ LLM Information Format 是纯数据转换系统，不直接产生视觉或音频
 - [ ] `parse_response('{"target": "invalid"}')` 返回 `NONE`（target 格式错误），降级检查 direction（若也无则 NONE）
 
 ### 截断与 token 控制
-- [ ] Visited cells 超过 `max_visited_count` 时，仅显示最近访问的 N 个，并注明 "showing last N of M visited"
-- [ ] Explored cells 超过 `max_explored_count` 时，按距 Agent 当前位置的路径距离排序，仅显示最近的 N 个，并注明 "showing nearest N of M explored"
+- [ ] Visited cells 超过 `max_visited_count` 时，仅显示最近首次到达的 N 个（首次访问时间倒序，与 Grid Movement 的 append-only visited_cells 反转输出一致），并注明 "showing last N of M visited"
+- [ ] Explored cells 超过 `max_explored_count` 时，按距 Agent 当前位置的曼哈顿距离排序，仅显示最近的 N 个，并注明 "showing nearest N of M explored"
 - [ ] `include_ascii_map = false` 时 State Message 不包含 MAP 区域
 - [ ] `include_explored = false` 时 State Message 不包含 EXPLORED CELLS 区域
 
@@ -452,6 +452,6 @@ LLM Information Format 是纯数据转换系统，不直接产生视觉或音频
 |----------|-------|----------|-----------|
 | ASCII 地图 vs 纯坐标列表：哪种格式的 LLM 导航成功率更高？ | Game Designer | Prototype 阶段 | 需要 A/B 测试。MVP 默认关闭 ASCII 地图（`include_ascii_map = false`），原型阶段用两种配置分别运行 50 场比赛，比较到达率和平均步数 |
 | 是否应该在 prompt 中告诉 LLM "你已经在这个位置停留了 N 个 tick"？ | Game Designer | Sprint 1 | 如果 LLM 反复返回无效方向导致原地不动，提醒它"你已经停了 3 个 tick"可能帮助它调整策略。但这也增加了 prompt 复杂度 |
-| Explored cells 的排序策略：路径距离 vs 访问时间？ | Technical Director | Sprint 1 | 当前设计按路径距离排序（近的优先）。备选：按最后访问时间排序（最近看到的优先）。两者各有优势，需测试 |
+| Explored cells 的排序策略：路径距离 vs 访问时间？ | Technical Director | Sprint 1 | **Resolved 2026-04-04**: 使用曼哈顿距离排序。路径距离（`MazeData.get_shortest_path()`）在完整迷宫上运行，会通过排序结果间接泄露 Agent 未知区域的墙壁信息，违反 FoW 信息边界（Core Rule #4）。曼哈顿距离不需要迷宫结构信息，安全且足够作为"距离近优先"的近似。备选方案（已知图 BFS）需要新增 API 且复杂度过高，不值得 |
 | 是否需要支持多种 LLM 的 prompt 格式？不同 LLM（GPT-4, Claude, Gemini）对格式的偏好可能不同 | Technical Director | Sprint 2 | MVP 使用统一格式。如果原型测试显示不同 LLM 表现差异大，考虑添加 format_style 配置（"structured" / "natural_language"） |
 | 是否应该在 State Message 中包含"上一个 tick 的结果"（如"你向北移动成功"或"你撞墙了"）？ | Game Designer | Sprint 1 | 这帮助 LLM 理解自己行为的后果，但也增加 token。可以作为可选字段 |
