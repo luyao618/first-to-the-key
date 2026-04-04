@@ -117,6 +117,17 @@ OBJECTIVE: {objective_text}
 Keys collected: {keys_collected}/3
 ```
 
+**OBJECTIVE 生成规则**（基于 `KeyCollection.get_agent_progress(agent_id)` 的返回值）：
+
+| AgentKeyState | objective_text | 说明 |
+|---------------|---------------|------|
+| `NEED_BRASS` | `Find the Brass key` | 初始目标 |
+| `NEED_JADE` | `Find the Jade key` | 已拾取 Brass |
+| `NEED_CRYSTAL` | `Find the Crystal key` | 已拾取 Jade |
+| `KEYS_COMPLETE` | `Find the treasure chest` | 三把钥匙已集齐，宝箱已 Active |
+
+`keys_collected` 由 `AgentKeyState` 推导：`NEED_BRASS` → 0，`NEED_JADE` → 1，`NEED_CRYSTAL` → 2，`KEYS_COMPLETE` → 3。`keys_total` 固定为 3。
+
 ### ASCII Map Format
 
 以 Agent 当前位置为中心，渲染一个 `(2 * vision_radius + 1)` 大小的局部 ASCII 地图。使用紧凑的墙壁+通道表示法：
@@ -265,7 +276,7 @@ LLMInformationFormat:
   maze: MazeData
   fog: FogOfWar
   movement: GridMovementManager
-  keys: KeyCollection              # 查询钥匙进度（get_agent_progress）和激活状态（is_key_active）
+  keys: KeyCollection              # 查询钥匙进度和激活状态（get_agent_progress, is_key_active）
   win_condition: WinCondition      # 查询宝箱激活状态（is_chest_active）
 
   # --- 配置 ---
