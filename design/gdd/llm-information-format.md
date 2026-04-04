@@ -28,7 +28,7 @@ LLM Information Format 是玩家不会直接看到的系统——但它决定了
 1. LLM Information Format 是一个**无状态转换器**——每次调用 `build_state_message()` 时从上游系统实时读取数据，不缓存任何跨调用的状态
 2. LLM Agent Integration 在**决策点**（而非每个 tick）为每个 Agent 调用 `build_state_message(agent_id)` 获取完整的 state message，发送给 LLM API。决策点包括：岔路口、死胡同、视野内新目标出现、撞墙等（详见 `llm-agent-integration.md` 决策点定义）。直道自动前进不触发 API 调用
 3. LLM 的文本响应通过 `parse_response(text)` 解析。**主格式**为目标坐标 `{"target": [x, y]}`，由 LLM Agent Integration 进行 A* 寻路生成路径队列。**降级格式**为单方向 `{"direction": "NORTH"}`，生成长度为 1 的路径队列。任何无法解析为合法目标或方向的响应，等同于 `NONE`（原地不动）
-4. **信息边界严格遵循 Fog of War 和 Marker 激活状态**：只有 `VISIBLE` 状态的 cell 会包含标记信息（钥匙/宝箱），`EXPLORED` cell 仅包含墙壁结构，`UNKNOWN` cell 完全不出现在 prompt 的结构化列表（Visible/Explored/Visited）中。ASCII 地图中使用 `?` 标记视野边界外的 cell 作为空间参照，但不包含任何结构或标记信息。**Marker 激活过滤由本系统负责**——FoW 只提供 cell 可见性，不判断 marker 是否 Active。`build_state_message()` 在构建 Visible cells 列表时，必须对每个 cell 的 markers 执行以下过滤：
+4. **信息边界严格遵循 Fog of War 和 Marker 激活状态**：只有 `VISIBLE` 状态的 cell 会包含标记信息（钥匙/宝箱），`EXPLORED` cell 仅包含墙壁结构，`UNKNOWN` cell 完全不出现在 prompt 的结构化列表（Visible/Explored/Visited）中。ASCII 地图中使用 `?` 标记视野边界外的 cell 作为空间参照，但不包含任何结构或标记信息。**注意**：虽然本系统严格遵循 FoW 信息边界，LLM Agent Integration 的 A* 寻路在完整迷宫上运行——这是一个有意的设计取舍，详见 `llm-agent-integration.md` 的"A* 寻路范围决策"说明。**Marker 激活过滤由本系统负责**——FoW 只提供 cell 可见性，不判断 marker 是否 Active。`build_state_message()` 在构建 Visible cells 列表时，必须对每个 cell 的 markers 执行以下过滤：
    - 钥匙 marker：仅在 `KeyCollection.is_key_active(key_type)` 为 true 时包含
    - 宝箱 marker：仅在 `WinCondition.is_chest_active()` 为 true 时包含
    - 不满足条件的 marker 从 prompt 中完全排除，等效于该 cell 上不存在标记

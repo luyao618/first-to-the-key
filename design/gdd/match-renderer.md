@@ -73,7 +73,7 @@ Match Renderer 是将比赛状态可视化的 Presentation 层系统。它从 Ma
     - SETUP → COUNTDOWN：`initialize(maze)` 构建 TileMap，放置 Marker Sprites，放置 Agent Sprites 到 Spawn 点，设置摄像机
     - COUNTDOWN → PLAYING：显示倒计时动画（3-2-1-GO），倒计时结束后动画消失
     - PLAYING：持续响应移动/拾取/激活事件播放对应动画（Agent 移动、钥匙激活/拾取、宝箱激活）
-    - PLAYING → FINISHED：播放终局动画序列（宝箱开启 + 胜利者高亮 + 失败者灰显）
+    - PLAYING → FINISHED：不播放终局动画。Match 根脚本收到 `match_finished` 后立即调用 `SceneManager.go_to("result")` 切换到 Result 场景，终局表现（胜负展示、统计数据）由 Result Screen 负责。Renderer 在场景切换时随 Match 场景一起销毁
 
 ### Data Structures
 
@@ -136,8 +136,8 @@ Match Renderer 自身没有独立状态机——它的行为完全由 Match Stat
 |-------------|-------------------|
 | **SETUP** | 无渲染。等待 `state_changed` 信号 |
 | **COUNTDOWN** | `initialize(maze)` 构建完整渲染场景。显示倒计时动画（3-2-1-GO）。Agent 和标记物可见但静止 |
-| **PLAYING** | 活跃渲染：响应 `mover_moved`/`mover_blocked` 播放 Agent 动画，响应 `key_activated`/`key_collected` 播放钥匙动画，响应 `chest_activated` 播放宝箱出现动画。注意：`chest_opened` 动画在 FINISHED 状态下播放（见下方终局动画） |
-| **FINISHED** | 播放终局动画。胜利者 Agent 高亮放大，失败者灰显半透明。宝箱开启动画（如果是正常胜利）或 "TIME UP" 文字（如果是超时平局）。之后保持静态画面直到 `reset()` |
+| **PLAYING** | 活跃渲染：响应 `mover_moved`/`mover_blocked` 播放 Agent 动画，响应 `key_activated`/`key_collected` 播放钥匙动画，响应 `chest_activated` 播放宝箱出现动画。注意：`chest_opened` 信号与 `finish_match()` 在同一 tick 内触发，Match 根脚本随后立即切换到 Result 场景，宝箱开启动画可能无法播放完毕——终局表现由 Result Screen 负责 |
+| **FINISHED** | 不播放终局动画。Match 根脚本收到 `match_finished` 后立即切换到 Result 场景，Renderer 随 Match 场景销毁。终局表现由 Result Screen 负责 |
 
 **标记物渲染状态**
 
@@ -152,7 +152,7 @@ HIDDEN → APPEARING → IDLE → (钥匙: COLLECTED / 宝箱: OPENED)
 | **HIDDEN** | `visible = false`，不渲染 | 初始状态（Inactive 标记物） |
 | **APPEARING** | 淡入 + 光晕动画（0.5 秒） | 收到 `key_activated` 或 `chest_activated` 信号 |
 | **IDLE** | 浮动循环动画 | APPEARING 动画完成后自动进入 |
-| **COLLECTED** | 闪烁消融到 Agent 身上（0.3-0.5 秒），之后 `visible = false`（仅 God View 下；Agent View 下钥匙作为检查点保留可见） | 收到 `key_collected(agent_id, key_type)` 信号。注意：God View 下钥匙是检查点语义，被 A 拾取后 B 仍可拾取。设计选择：God View 下钥匙被拾取后**不隐藏**，改为半透明显示表示"已被至少一方拾取"，当双方都拾取后再完全隐藏。**推断逻辑**：Renderer 收到 `key_collected(agent_id, key_type)` 后，查询双方 `KeyCollection.get_agent_progress(0)` 和 `get_agent_progress(1)`——如果某 Agent 的 progress 已超过该钥匙阶段（如 progress 为 `NEED_JADE` 则 Brass 已拾取），即视为该 Agent 已拾取。一方拾取 → `modulate.a = 0.4`；双方拾取 → `visible = false` |
+| **COLLECTED** | 闪烁消融动画（0.3-0.5 秒）。God View 下钥匙是检查点语义，被 A 拾取后 B 仍可拾取。**渲染规则**：一方拾取 → `modulate.a = 0.4`（半透明）；双方都拾取 → `visible = false`。**推断逻辑**：Renderer 收到 `key_collected(agent_id, key_type)` 后，查询双方 `KeyCollection.get_agent_progress(0)` 和 `get_agent_progress(1)`——如果某 Agent 的 progress 已超过该钥匙阶段（如 progress 为 `NEED_JADE` 则 Brass 已拾取），即视为该 Agent 已拾取。一方拾取 → `modulate.a = 0.4`；双方拾取 → `visible = false` | 收到 `key_collected(agent_id, key_type)` 信号 |
 | **OPENED** | 宝箱盖弹开 + 金蛋升起 + 光芒（1.0-1.5 秒） | 收到 `chest_opened(agent_id)` 信号 |
 
 **Agent 渲染状态**
@@ -177,7 +177,7 @@ IDLE → BUMPING → IDLE
 | **Fog of War / Vision** | Renderer depends on this | `get_cell_visibility(agent_id, x, y)` | MVP（God View）不使用。未来 Agent View 模式下查询可见性状态决定 cell 渲染方式（Unknown/Explored/Visible） |
 | **Key Collection** | Renderer depends on this | 监听 `key_activated`, `key_collected` 信号；查询 `is_key_active()`, `get_agent_progress()` | `key_activated`：触发钥匙出现动画。`key_collected`：触发钥匙拾取动画 + 半透明化。`is_key_active()`：`initialize()` 时判断哪些钥匙应初始可见（Brass 在比赛开始时已 Active） |
 | **Win Condition / Chest** | Renderer depends on this | 监听 `chest_activated`, `chest_opened` 信号；查询 `is_chest_active()` | `chest_activated`：触发宝箱出现动画（淡入 + 光柱）。`chest_opened`：触发宝箱开启动画（盖弹开 + 金蛋） |
-| **Match State Manager** | Renderer depends on this | 监听 `state_changed`, `match_finished` 信号；查询 `get_tick_count()`, `get_elapsed_time()` | `state_changed`：驱动渲染生命周期（初始化/倒计时/活跃/终局）。`match_finished`：读取比赛结果决定胜利/平局动画 |
+| **Match State Manager** | Renderer depends on this | 监听 `state_changed` 信号；查询 `get_tick_count()`, `get_elapsed_time()` | `state_changed`：驱动渲染生命周期（初始化/倒计时/活跃渲染）。FINISHED 状态不播放终局动画——Match 根脚本收到 `match_finished` 后立即切换到 Result 场景，Renderer 随场景销毁 |
 | **Match HUD** | HUD 与 Renderer 并行 | 无直接依赖 | 两者都是 Presentation 层，各自独立监听游戏系统信号。HUD 渲染叠加在 Renderer 之上（UI Canvas Layer） |
 
 ## Formulas
@@ -256,7 +256,7 @@ y_offset = sin(time * 2π / float_anim_period) * float_anim_amplitude
 | 迷宫非常小（2x2），摄像机缩放后 cell 很大 | 正常缩放，每个 cell 占据屏幕大块面积。pixel art 在放大后可能出现模糊——使用 Godot 的 nearest-neighbor filtering 保持像素清晰 | 小迷宫的极端放大是合法的。设置 `texture_filter = TEXTURE_FILTER_NEAREST` 避免模糊 |
 | `key_collected` 信号到达但对应的 key_sprite 已经处于 HIDDEN 状态 | 忽略，不播放动画。打印调试日志 | 不应发生（钥匙必须 Active 才能被拾取），但防御性处理 |
 | `chest_opened` 信号到达但 chest_sprite 处于 HIDDEN 状态 | 忽略，不播放动画。打印调试日志 | 同上——宝箱必须 Active 才能被开启 |
-| 比赛超时平局（`match_finished(DRAW, -1)`）而非宝箱开启胜利 | 不播放宝箱开启动画。显示 "TIME UP" 文字叠加。两个 Agent 都灰显（无胜利者） | 超时平局没有宝箱开启事件，Renderer 根据 `match_finished` 的 result 参数决定播放哪种终局动画 |
+| 比赛超时平局（`match_finished(DRAW, -1)`）而非宝箱开启胜利 | 无终局动画。Match 根脚本收到 `match_finished` 后立即切换到 Result 场景。超时平局的视觉表现由 Result Screen 负责 | 终局表现统一在 Result Screen 中处理，Renderer 不区分胜利和平局的 FINISHED 行为 |
 | `initialize()` 时 MazeData 中某个标记缺失（如无 CHEST） | 对应 Sprite 不创建。其他标记正常渲染。打印警告日志 | 不崩溃，缺失的标记不影响其他元素的渲染。这是 Maze Generator 的 bug，Renderer 做防御性处理 |
 | 窗口大小改变（resize） | 重新计算 camera zoom 以适配新分辨率 | 连接 Viewport 的 `size_changed` 信号，动态调整 zoom |
 | 钥匙被 Agent A 拾取后 Agent B 到达同一位置再次拾取 | Agent A 拾取时钥匙 Sprite 变为半透明。Agent B 拾取时钥匙 Sprite 完全隐藏（双方都已拾取）。两次拾取各播放独立的拾取反馈动画（闪烁 + 粒子效果跟随对应 Agent） | God View 下钥匙是检查点语义，需要视觉区分"被一方拾取"和"被双方拾取" |
@@ -271,7 +271,7 @@ y_offset = sin(time * 2π / float_anim_period) * float_anim_amplitude
 | **Fog of War / Vision** | Match Renderer depends on this | MVP 不使用（God View 不经过 FoW）。未来 Agent View 模式下查询 `get_cell_visibility(agent_id, x, y)` 决定 cell 渲染方式（Unknown = 黑色遮挡，Explored = 半透明灰色，Visible = 完全显示）。**注意**：FoW 不负责 marker 激活过滤——标记物可见性由 Renderer 直接查询 KeyCollection / WinCondition 判断 |
 | **Key Collection** | Match Renderer depends on this | 监听 `key_activated(key_type)` 触发钥匙出现动画，监听 `key_collected(agent_id, key_type)` 触发拾取动画。查询 `is_key_active(key_type)` 用于初始化时判断哪些钥匙可见和运行时过滤 Inactive 钥匙（**此过滤由 Renderer 执行，FoW 不参与**），查询 `get_agent_progress(agent_id)` 判断钥匙半透明状态 |
 | **Win Condition / Chest** | Match Renderer depends on this | 监听 `chest_activated` 触发宝箱出现动画（淡入 + 光柱），监听 `chest_opened(agent_id)` 触发开启动画（盖弹开 + 金蛋）。查询 `is_chest_active()` 用于初始化时判断宝箱是否可见和运行时过滤 Inactive 宝箱（**此过滤由 Renderer 执行，FoW 不参与**） |
-| **Match State Manager** | Match Renderer depends on this | 监听 `state_changed(old, new)` 驱动渲染生命周期（COUNTDOWN 初始化、PLAYING 活跃渲染、FINISHED 终局动画），监听 `match_finished(result)` 决定胜利/平局动画类型。读取 `tick_interval` 配置计算 `move_anim_duration` |
+| **Match State Manager** | Match Renderer depends on this | 监听 `state_changed(old, new)` 驱动渲染生命周期（COUNTDOWN 初始化、PLAYING 活跃渲染）。FINISHED 状态不播放终局动画——Match 根脚本收到 `match_finished` 后立即切换到 Result 场景，Renderer 随场景销毁。读取 `tick_interval` 配置计算 `move_anim_duration` |
 | **(无下游依赖)** | — | Match Renderer 是数据流终端，不发出信号，不被任何其他系统依赖 |
 
 ## Tuning Knobs
@@ -326,9 +326,8 @@ y_offset = sin(time * 2π / float_anim_period) * float_anim_amplitude
 | **标记物出现** | 透明度 0→1 淡入 + 轻微缩放 0.5→1.0 | 0.5 秒 | `key_activated` / `chest_activated` | MVP |
 | **钥匙拾取** | 闪烁 2-3 次后缩放至 0 + 透明度渐变。拾取粒子效果飞向对应 Agent | 0.3-0.5 秒 | `key_collected` | MVP |
 | **宝箱出现** | 透明度淡入 + 光柱效果（比钥匙出现更隆重） | 0.5-0.8 秒 | `chest_activated` | MVP |
-| **宝箱开启** | 盖弹开帧动画 → 金蛋升起 → 径向光芒扩散 | 1.0-1.5 秒 | `chest_opened` | MVP |
+| **宝箱开启** | 盖弹开帧动画 → 金蛋升起 → 径向光芒扩散。注意：`chest_opened` 在 `finish_match()` 之前发出（仍在 PLAYING 阶段），动画启动后场景很快被切换到 Result，动画可能仅播放开头部分即被中断——这是预期行为，完整的终局展示由 Result Screen 负责 | 1.0-1.5 秒（可能被中断） | `chest_opened` | MVP |
 | **倒计时** | 屏幕中央 "3" → "2" → "1" → "GO!" 文字缩放弹入弹出 | 每数字 1 秒，GO 持续 0.5 秒 | COUNTDOWN 状态 | MVP |
-| **胜利者高亮** | 胜利 Agent 持续脉冲放大/发光；失败 Agent modulate 灰色 + 半透明 | 持续直到 reset | `match_finished` | MVP |
 
 ### Audio
 
@@ -341,7 +340,6 @@ Match Renderer 本身不直接管理音效播放（建议由独立的 AudioManag
 | 宝箱出现动画开始 | 深沉魔法浮现声 | Win Condition (audio) |
 | 宝箱开启动画开始 | 木箱"咔嗒" + 华丽乐句 | Win Condition (audio) |
 | 倒计时每秒 | 节拍音效，GO 时更强 | Match State Manager (audio) |
-| 胜利判定 | 欢快旋律 | Result Screen (audio) |
 
 **设计说明**：
 
@@ -379,7 +377,7 @@ Match Renderer 本身不直接管理音效播放（建议由独立的 AudioManag
 | AC-11 | `key_activated` 信号触发对应钥匙的出现动画（淡入 + 缩放） | 视觉测试：新钥匙从透明渐变到完全可见 |
 | AC-12 | `key_collected` 信号触发拾取动画，之后钥匙 Sprite 变为半透明（一方拾取）或完全隐藏（双方拾取） | 视觉测试 + 单元测试：断言 modulate.a 值正确 |
 | AC-13 | `chest_activated` 信号触发宝箱出现动画（淡入 + 光柱），比钥匙出现更隆重 | 视觉测试 |
-| AC-14 | `chest_opened` 信号触发宝箱开启动画（盖弹开 + 金蛋 + 光芒） | 视觉测试 |
+| AC-14 | `chest_opened` 信号触发宝箱开启动画（盖弹开），动画在场景切换时被中断是预期行为 | 视觉测试：宝箱开启动画启动，随后场景切换到 Result |
 | AC-15 | Active 标记物播放浮动循环动画 | 视觉测试：标记物 Y 轴有周期性微动 |
 
 ### 摄像机
@@ -394,7 +392,7 @@ Match Renderer 本身不直接管理音效播放（建议由独立的 AudioManag
 | # | Criterion | Verification |
 |---|-----------|-------------|
 | AC-18 | COUNTDOWN 状态显示倒计时动画（3-2-1-GO） | 视觉测试 |
-| AC-19 | FINISHED 状态正确显示胜利/平局动画（胜利者高亮或 TIME UP 文字） | 视觉测试：正常胜利和超时平局两种场景 |
+| AC-19 | FINISHED 状态不播放终局动画，Match 根脚本收到 `match_finished` 后立即切换到 Result 场景 | 集成测试：`match_finished` 信号发出后确认 `SceneManager.go_to("result")` 被调用，Renderer 不启动任何新的 Tween |
 | AC-20 | `cleanup()` 正确移除所有渲染节点，不留残余 | 单元测试：cleanup 后 maze_layer、marker_layer、agent_layer 子节点数为 0 |
 
 ### 性能
@@ -409,7 +407,7 @@ Match Renderer 本身不直接管理音效播放（建议由独立的 AudioManag
 | # | Question | Impact | Status |
 |---|----------|--------|--------|
 | OQ-1 | TileMap tile 设计：是用 16 种独立 tile 图片还是用 Godot TileMap 的 terrain/autotile 功能自动匹配墙壁？Autotile 更灵活但配置复杂；独立 tile 简单直接但美术资源量更大 | Medium | 推迟到实现阶段决定。MVP 建议先用 16 种独立 tile，后续可迁移到 autotile |
-| OQ-2 | 宝箱开启动画与 `finish_match()` 的时序（来自 Win Condition OQ-1） | Medium | **Resolved 2026-04-03**: `finish_match()` 立即触发，Renderer 在 FINISHED 状态下播放终局动画序列（宝箱开启 + 胜利者高亮）。逻辑层不等渲染层——与 Grid Movement 的"逻辑即时更新，渲染异步追赶"设计一致 |
+| OQ-2 | 宝箱开启动画与 `finish_match()` 的时序（来自 Win Condition OQ-1） | Medium | **Resolved 2026-04-04**: `finish_match()` 立即触发，Match 根脚本收到 `match_finished` 后立即调用 `SceneManager.go_to("result")` 切换到 Result 场景。Renderer 不播放终局动画（宝箱开启、胜利者高亮等终局表现全部由 Result Screen 负责）。FINISHED 阶段不在 Match 场景停留 |
 | OQ-3 | Agent View 渲染模式的架构预留：是用同一 TileMap 加 FoW 遮罩覆盖层，还是使用 Godot 的 SubViewport 做分屏？SubViewport 更干净但性能开销更大 | Low | 推迟到 Core 阶段（Player vs Player 模式）设计时决定 |
 | OQ-4 | 是否需要"Agent 路径轨迹"可视化？在 God View 下用淡色线条显示每个 Agent 的历史移动路径，帮助观战者分析 prompt 效果 | Low | 推迟到 Full 阶段。MVP 不显示路径轨迹，但 Grid Movement 的 `visited_cells` 数据已可用 |
 | OQ-5 | Grid Movement 的 OQ-2 现在可以回答：移动动画与逻辑解耦——逻辑层立即更新坐标，渲染层异步播放补间动画追赶逻辑位置 | — | Resolved |

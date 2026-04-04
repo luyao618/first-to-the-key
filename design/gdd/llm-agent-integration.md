@@ -2,7 +2,7 @@
 
 > **Status**: Approved
 > **Author**: design-system agent
-> **Last Updated**: 2026-04-03
+> **Last Updated**: 2026-04-04
 > **System Index**: #9
 > **Layer**: Feature
 > **Implements Pillar**: Human-AI Symbiosis, Simple Rules Deep Play
@@ -158,6 +158,8 @@ LLM 返回目标坐标，系统自动寻路：
 
 **A* 寻路范围决策**：A* 在**完整迷宫**上运行（使用 `MazeData.get_shortest_path()`），而非仅在已知区域上运行。虽然 Agent 的 FoW 限制了它"看到"的范围，但路径规划使用完整墙壁数据。这本质上是"自动行走"功能——LLM 负责做高层决策（去哪里），系统负责底层执行（怎么走过去），与玩家在 RTS 游戏中点击目标后单位自动寻路相同。目标坐标已限制在 visible/explored 区域内，因此 LLM 无法指向它不知道的地方，公平性由目标验证保证而非寻路范围保证。
 
+> **与 Fog of War 的信息边界关系**：LLM 的**输入信息**严格遵循 FoW 规则——`build_state_message()` 不包含 Unknown 区域的任何结构或标记信息（见 `llm-information-format.md` Core Rule #4）。LLM 的**目标选择**限制在 visible/explored 区域。A* 使用完整迷宫仅影响**路径执行**（怎么走到目标），不影响**决策信息**（LLM 知道什么）。这是一个有意的设计取舍：如果 A* 仅在已知区域运行，当目标位于 explored 区域但中间存在未探索的"捷径"时，Agent 会绕远路走已知路径——这虽然更"公平"但会导致 Agent 行为不自然（明明有直路却绕行）。MVP 阶段选择"完整迷宫寻路 + 目标限制在已知区域"的方案，原型阶段评估是否需要切换到"已知区域寻路"。
+
 ### Data Structures
 
 ```
@@ -188,7 +190,7 @@ AgentBrain:
 LLMAgentManager:
   brains: Array<AgentBrain>            # 每个 Agent 一个 Brain
   info_format: LLMInformationFormat    # 信息格式转换器引用
-  maze: MazeData                       # 迷宫数据引用
+  maze: MazeData                       # 迷宫数据引用（COUNTDOWN 前从 MSM.get_maze() 获取）
   movement: GridMovementManager        # 移动管理器引用
   fog: FogOfWar                        # 迷雾系统引用
 

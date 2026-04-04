@@ -2,7 +2,7 @@
 
 > **Status**: Approved
 > **Author**: design-system agent
-> **Last Updated**: 2026-04-03
+> **Last Updated**: 2026-04-04
 > **System Index**: #2
 > **Layer**: Foundation
 > **Implements Pillar**: Simple Rules Deep Play, Fair Racing
@@ -75,6 +75,7 @@ enum VisionStrategy { PATH_REACH, LINE_OF_SIGHT }
 MatchStateManager:
   current_state: MatchState        # 当前状态
   config: MatchConfig              # 比赛配置（Setup 阶段填充）
+  current_maze: MazeData           # 当前比赛的迷宫实例（SETUP 阶段由 Maze Generator 通过 maze_generated 信号写入，其他系统从此字段读取）
   result: MatchResult              # 比赛结果（Finished 时设置）
   winner_id: int                   # 胜利者 ID（0 = A, 1 = B, -1 = 无）
   tick_count: int                  # 已经过的 tick 数
@@ -95,6 +96,7 @@ MatchStateManager:
   # --- 查询接口 ---
   get_state() -> MatchState
   get_config() -> MatchConfig
+  get_maze() -> MazeData                   # 返回当前比赛的迷宫实例（SETUP 完成后可用）
   get_tick_count() -> int
   get_elapsed_time() -> float
   is_playing() -> bool              # 便捷方法：当前是否在 Playing 状态
@@ -130,27 +132,27 @@ MatchStateManager:
 
 | State | Entry Condition | Behavior | Exit Condition |
 |-------|----------------|----------|----------------|
-| **SETUP** | `start_setup(config)` 或 `reset()` | 等待配置填充。Prompt Input UI 在此阶段活跃。Maze Generator 在此阶段生成迷宫 | `start_countdown()` 被调用（前置条件：配置完整且 MazeData 已 finalized） |
+| **SETUP** | `start_setup(config)` 或 `reset()` | 等待配置填充。Prompt Input UI 在此阶段活跃。Maze Generator 在此阶段生成迷宫，完成后通过 `maze_generated` 信号将 MazeData 实例写入 MSM 的 `current_maze` 字段 | `start_countdown()` 被调用（前置条件：配置完整且 `current_maze` 已 finalized） |
 | **COUNTDOWN** | `start_countdown()` | 显示倒计时（3-2-1-GO）。Agent 和玩家已就位但不可移动 | 倒计时结束，自动调用 `start_playing()` |
 | **PLAYING** | `start_playing()` | Tick 计时器启动，每隔 `tick_interval` 秒发出 `tick` 信号。Agent 可以移动，钥匙可以拾取 | `finish_match()` 被调用（Win Condition 触发） |
-| **FINISHED** | `finish_match(result, winner_id)` | Tick 停止。记录结果和胜利者。Result Screen 展示比赛数据 | `reset()` 被调用（玩家选择重赛或返回） |
+| **FINISHED** | `finish_match(result, winner_id)` | Tick 停止。记录结果和胜利者。Match 根脚本监听 `match_finished` 后立即调用 `SceneManager.go_to("result")` 切换到 Result 场景展示比赛数据。FINISHED 阶段不在 Match 场景停留 | `reset()` 被调用（玩家在 Result 场景选择重赛或返回） |
 
 ### Interactions with Other Systems
 
 | System | Direction | Interface | Data Flow |
 |--------|-----------|-----------|-----------|
 | **Prompt Input** | Prompt Input -> Manager | `start_setup()`, 写入 `config.prompt_a/b` | UI 收集 prompt 后填入配置，配置完成后触发 countdown |
-| **Maze Generator** | Manager -> Generator（通过信号） | `state_changed` 信号 | Setup 阶段，Generator 监听信号开始生成迷宫 |
+| **Maze Generator** | Manager -> Generator（通过信号） | `state_changed` 信号；`maze_generated` 信号 | Setup 阶段，Generator 监听信号开始生成迷宫。生成完成后 Generator 发出 `maze_generated(maze_data)` 信号，**MSM 接收并存储到 `current_maze` 字段**——此后所有系统从 MSM 获取迷宫引用（`get_maze()`），MSM 是迷宫实例在比赛生命周期中的唯一持有者 |
 | **LLM Agent Integration** | Agent -> Manager | 监听 `tick` 信号 | 每个 tick，Agent 系统读取信号执行一次 LLM 决策 + 移动 |
 | **Grid Movement** | Movement -> Manager | 監听 `tick` 信号，查询 `is_playing()` | 仅在 Playing 状态下处理移动请求 |
 
 **`tick` 信号处理顺序约束**：LLM Agent Integration 必须在 Grid Movement 之前处理 `tick` 信号——Agent 先写入 `pending_direction`（Phase 1 Decision），Grid Movement 再读取并执行移动（Phase 2 Movement）。实现方式：确保 LLM Agent Integration 的 `connect("tick", ...)` 调用先于 Grid Movement 的 `connect("tick", ...)`（Godot 信号按连接顺序同步分派），或改用两个分离信号（`tick_decision` → `tick_execute`）。详见 Grid Movement GDD 的 Tick Phase Model。
 
-| **Fog of War** | FoW -> Manager（通过信号） | `state_changed` 信号 | COUNTDOWN 阶段，FoW 监听信号调用 `initialize(maze, agent_ids)` 创建 VisionMap 并刷新初始视野。`initialize()` 从 MazeData 读取 spawn 位置，并从 MatchConfig 读取 `vision_strategy`。Rematch 时相同流程（重新 initialize 即可） |
+| **Fog of War** | FoW -> Manager（通过信号） | `state_changed` 信号 | COUNTDOWN 阶段，FoW 监听信号调用 `initialize(maze, agent_ids)` 创建 VisionMap 并重置为全 UNKNOWN 状态。**FoW 的 `initialize()` 不刷新初始视野**——初始视野由 Grid Movement 的 `initialize()` 在 Mover 就位后调用 `FoW.update_vision()` 完成（见 `grid-movement.md`）。FoW 从 MatchConfig 读取 `vision_strategy`。Rematch 时相同流程（重新 initialize 即可） |
 | **Win Condition** | WinCon -> Manager | `finish_match(result, winner_id)` | 检测到胜利条件后调用，触发比赛结束 |
 | **Match HUD** | HUD -> Manager | 监听 `tick` 信号，查询 `get_tick_count()` / `get_elapsed_time()` | 显示比赛时间和 tick 数 |
 | **Result Screen** | Result -> Manager | 监听 `match_finished` 信号，查询 `get_config()` | 展示比赛结果、双方 prompt、比赛时长 |
-| **Scene Manager** | Manager <-> Scene | `reset()` 后通知 Scene Manager 切换场景 | 比赛结束后返回主菜单或重赛 |
+| **Scene Manager** | Scene depends on this（间接） | MSM 发出 `state_changed` / `match_finished` 信号 | **MSM 不直接调用 SceneManager**。Match 根脚本监听 `match_finished` 后调用 `SceneManager.go_to("result")`。Result Screen 的 Rematch 按钮调用 `MSM.reset()` 后调用 `SceneManager.go_to("match")`。两者通过场景脚本中转，无直接引用 |
 
 ## Formulas
 
@@ -216,11 +218,11 @@ countdown_remaining = countdown_duration - (current_time - countdown_start_time)
 | **Maze Generator** | Generator depends on this | 监听 `state_changed` 信号，在 Setup 阶段启动迷宫生成 |
 | **LLM Agent Integration** | Agent depends on this | 监听 `tick` 信号驱动 LLM 决策循环，查询 `is_playing()` |
 | **Grid Movement** | Movement depends on this | 监听 `tick` 信号，仅在 Playing 状态处理移动 |
-| **Fog of War** | FoW depends on this | 监听 `state_changed` 信号，在 COUNTDOWN 阶段调用 `initialize(maze, agent_ids)` 创建 VisionMap、刷新初始视野（从 MazeData 读取 spawn 位置）、读取 `MatchConfig.vision_strategy` 选择视野算法 |
+| **Fog of War** | FoW depends on this | 监听 `state_changed` 信号，在 COUNTDOWN 阶段调用 `initialize(maze, agent_ids)` 创建 VisionMap 并重置为全 UNKNOWN 状态（不刷新初始视野——初始视野由 Grid Movement 的 `initialize()` 在 Mover 就位后调用 `FoW.update_vision()` 完成）、读取 `MatchConfig.vision_strategy` 选择视野算法 |
 | **Win Condition / Chest** | WinCon depends on this | 调用 `finish_match()` 触发比赛结束 |
 | **Match HUD** | HUD depends on this | 监听 `tick` 信号更新时间显示，查询 `get_elapsed_time()` |
 | **Result Screen** | Result depends on this | 监听 `match_finished` 信号，读取 `result` / `winner_id` / `config` 展示结果 |
-| **Scene Manager** | Scene depends on this | 监听 `state_changed` 信号协调场景切换 |
+| **Scene Manager** | Scene depends on this（间接） | MSM 发出 `state_changed` / `match_finished` 信号，Match 根脚本和 Result Scene 监听后调用 `SceneManager.go_to()`。MSM 不直接调用 SceneManager |
 | **Observer Communication** | Observer depends on this（Core 阶段） | 监听 `tick` 信号，仅在 Playing 状态处理观察者通信 |
 | **(无上游依赖)** | -- | Match State Manager 是 Foundation 层，不依赖任何其他游戏系统。仅依赖 Godot 引擎（Timer 节点、信号系统） |
 
@@ -244,8 +246,8 @@ countdown_remaining = countdown_duration - (current_time - countdown_start_time)
 |-------|----------------|---------------|----------|
 | 进入 Countdown | 屏幕中央显示 3-2-1-GO 倒计时数字 | 每秒一个倒计时音效，GO 时更强烈 | MVP |
 | 进入 Playing | 倒计时消失，迷宫和 Agent 完全可见 | 可选：比赛开始音效 | MVP |
-| 进入 Finished | 胜利者高亮，失败者灰显 | 胜利音效 / 平局音效 | MVP |
-| 超时触发 | 屏幕闪烁"TIME UP"提示 | 超时警告音效 | MVP |
+| 进入 Finished | 无——Match 根脚本立即切换到 Result 场景，终局表现由 Result Screen 负责 | 无——胜利/平局音效由 Result Screen 负责 | MVP |
+| 超时触发 | 无——超时平局的 "TIME UP" 展示由 Result Screen 负责 | 无——超时音效由 Result Screen 负责 | MVP |
 
 ## Acceptance Criteria
 
@@ -262,7 +264,7 @@ countdown_remaining = countdown_duration - (current_time - countdown_start_time)
 - [ ] Countdown 结束后自动调用 `start_playing()`，不需要外部触发
 - [ ] `finish_match()` 调用后 tick 计时器立即停止，不再发出 `tick` 信号
 - [ ] `match_finished` 信号在 `finish_match()` 时发出，携带正确的 `result`
-- [ ] `reset()` 后 `tick_count`、`elapsed_time`、`result`、`winner_id` 全部清零
+- [ ] `reset()` 后 `tick_count`、`elapsed_time`、`result`、`winner_id` 全部清零，`current_maze` 清为 `null`
 - [ ] Performance: 状态转移和信号发送在 1ms 内完成
 - [ ] 所有配置值（tick_interval, countdown_duration, max_match_duration）从外部配置读取，无硬编码
 

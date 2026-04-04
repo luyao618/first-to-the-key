@@ -2,7 +2,7 @@
 
 > **Status**: Approved
 > **Author**: design-system agent
-> **Last Updated**: 2026-04-03
+> **Last Updated**: 2026-04-04
 > **System Index**: #10
 > **Layer**: Feature
 > **Implements Pillar**: Simple Rules Deep Play, Fair Racing
@@ -60,7 +60,7 @@ Win Condition / Chest 是判定比赛胜负的终局系统。当任意一方 Age
 
 17. Win Condition 与 Key Collection 都在 Tick Phase Model 的 Phase 3（Reaction）中监听 `mover_moved` 信号。虽然 Phase 3 的监听者通常无顺序依赖（见 Grid Movement GDD Tick Phase Model），但存在一个间接依赖：Key Collection 的 `chest_unlocked` 信号可能在同一 Phase 3 中触发 Win Condition 激活宝箱和标记 Agent 资格。如果 Win Condition 的 `mover_moved` handler 在 Key Collection 之前执行，宝箱可能尚未 Active / Agent 尚未 Eligible，导致本 tick 错过判定
 18. 该风险已被 `pending_openers` + `call_deferred` 批量判定机制消除：Win Condition 不在 `mover_moved` handler 中立即调用 `finish_match()`，而是在当前帧末尾（`call_deferred`）统一判定。此时 Phase 3 的所有信号处理（包括 Key Collection 的 `chest_unlocked` → Win Condition 的资格更新）均已完成。因此 Phase 3 内部不需要强制连接顺序
-19. 此外，Maze Generator 保证 Crystal Key 和 Chest 位于不同 cell（`is_valid()` 验证 6 个标记位置互不重复），因此"同一次 `mover_moved` 同时触发 Crystal 拾取和宝箱开启"在结构上不可能发生——Agent 拾取 Crystal 后至少需要一次额外移动才能到达 Chest
+19. 此外，Maze Generator 保证 Crystal Key 和 Chest 位于不同 cell（`is_valid()` 验证 6 个标记位置互不重复——见 `maze-data-model.md`），因此"同一次 `mover_moved` 同时触发 Crystal 拾取和宝箱开启"在结构上不可能发生——Agent 拾取 Crystal 后至少需要一次额外移动才能到达 Chest
 
 **生命周期**
 
@@ -99,10 +99,10 @@ WinConditionManager:
 **设计决策**：
 
 - **`pending_openers` 缓冲区**：`mover_moved` 处理中不立即调用 `finish_match()`，而是将满足条件的 agent_id 加入缓冲区，tick 结束时统一判定。解决同 tick 平局问题
-- **`chest_opened` 信号**：在调用 `finish_match()` 之前发出，供统计/日志使用。注意：宝箱开启**动画**不在此信号窗口内播放——`finish_match()` 紧随其后立即调用，Renderer 在 FINISHED 状态下播放终局动画序列（宝箱开启 + 胜利者高亮）。逻辑层不等渲染层
+- **`chest_opened` 信号**：在调用 `finish_match()` 之前发出，供统计/日志使用。`finish_match()` 紧随其后立即调用，Match 根脚本收到 `match_finished` 后立即切换到 Result 场景。终局表现（胜负展示、统计数据）由 Result Screen 负责，Match Renderer 不播放终局动画
 - **不持有 Match State Manager 引用**：通过信号监听 `state_changed` 和 `tick`，通过直接调用 `finish_match()` 结束比赛（单向依赖）
 
-> **时序决策（Resolved）**：`finish_match()` 立即调用，不等待宝箱开启动画。Renderer 在 FINISHED 状态下播放终局动画序列。这保证逻辑层与渲染层解耦——与 Grid Movement 的"逻辑即时更新，渲染异步追赶"设计一致。
+> **时序决策（Resolved）**：`finish_match()` 立即调用，不等待宝箱开启动画。Match 根脚本收到 `match_finished` 后立即切换到 Result 场景，终局表现由 Result Screen 负责。逻辑层与渲染层解耦——与 Grid Movement 的"逻辑即时更新，渲染异步追赶"设计一致。
 
 ### States and Transitions
 
@@ -242,23 +242,24 @@ Win Condition 是一个纯规则判定系统，自身几乎没有可调参数—
 | **宝箱图标（Inactive）** | 不渲染。Inactive 宝箱对渲染系统完全不可见 | MVP |
 | **宝箱图标（Active）** | 宝箱在迷宫 cell 中显示，带轻微上下浮动动画（与钥匙风格一致）。颜色建议金色/木色，区别于钥匙的铜/绿/蓝 | MVP |
 | **宝箱激活动画** | 宝箱出现时的动画：从无到有的淡入 + 光柱效果（比钥匙出现更隆重），持续约 0.5-0.8 秒 | MVP |
-| **宝箱开启动画** | Agent 踩到宝箱时：宝箱盖弹开 → 金蛋升起 → 光芒扩散。持续约 1.0-1.5 秒，在 `chest_opened` 信号发出后、`finish_match` 调用前播放 | MVP |
-| **金蛋** | 纯视觉元素，作为宝箱开启动画的一部分出现。金色发光球体，不需要独立数据模型 | MVP |
-| **胜利者高亮** | 开启宝箱的 Agent 高亮/放大，失败者灰显（具体由 Match Renderer / Result Screen 负责） | MVP |
+| **宝箱开启动画** | `chest_opened` 信号发出后、`finish_match` 调用前的窗口极短。Match 根脚本随后立即切换场景，宝箱开启的视觉表现由 Result Screen 负责 | MVP |
+| **金蛋** | 纯视觉元素，作为 Result Screen 胜利展示的一部分。金色发光球体，不需要独立数据模型 | MVP |
+| **胜利者高亮** | 胜利者展示和失败者灰显由 Result Screen 负责（Match Renderer 不播放终局动画） | MVP |
 
 ### Audio
 
 | Element | Description | Priority |
 |---------|-------------|----------|
 | **宝箱出现音效** | 深沉的魔法浮现声，比钥匙激活音效更厚重，提示双方"终局阶段开始了" | MVP |
-| **宝箱开启音效** | 木质宝箱打开的"咔嗒"声 + 金蛋出现时的华丽乐句，是全场比赛最隆重的音效 | MVP |
+| **宝箱开启音效** | 木质宝箱打开的"咔嗒"声。注意：`chest_opened` 后场景很快切换到 Result，完整的胜利音乐由 Result Screen 负责 | MVP |
 | **胜利音效** | 欢快的短旋律（约 2-3 秒），在 `finish_match` 触发后播放。由 Result Screen 或全局音效管理器负责 | MVP |
 
 **设计说明**：
 
 - 宝箱开启动画是比赛中最有戏剧性的时刻——视觉和音效应该比钥匙拾取更有仪式感
 - 金蛋不需要独立的渲染逻辑或数据模型，它是宝箱开启动画的嵌入元素
-- **时序契约**：`chest_opened` 信号发出后 `finish_match()` 立即调用。宝箱开启动画由 Match Renderer 在 FINISHED 状态下播放——逻辑层不等渲染层。这与 Grid Movement 的设计一致（逻辑即时更新，渲染异步追赶）
+- **时序契约**：`chest_opened` 信号发出后 `finish_match()` 立即调用。Match 根脚本收到 `match_finished` 后立即切换到 Result 场景——Match Renderer 不播放终局动画，终局表现由 Result Screen 负责。逻辑层与渲染层解耦，与 Grid Movement 的设计一致（逻辑即时更新，渲染异步追赶）
+
 
 ## Acceptance Criteria
 
@@ -307,7 +308,7 @@ Win Condition 是一个纯规则判定系统，自身几乎没有可调参数—
 
 | # | Question | Impact | Status |
 |---|----------|--------|--------|
-| OQ-1 | 宝箱开启动画与 `finish_match()` 的时序 | Medium | **Resolved 2026-04-03**: `finish_match()` 立即调用，Renderer 在 FINISHED 状态下播放终局动画序列（宝箱开启 + 胜利者高亮）。逻辑层不等渲染层——与 Grid Movement 的设计一致 |
+| OQ-1 | 宝箱开启动画与 `finish_match()` 的时序 | Medium | **Resolved 2026-04-04**: `finish_match()` 立即调用，Match 根脚本收到 `match_finished` 后立即切换到 Result 场景。Match Renderer 不播放终局动画——终局表现（胜负展示、统计数据）统一由 Result Screen 负责 |
 | OQ-2 | Key Collection 的 OQ-2 现已解决：宝箱位置由 Maze Generator 预设在 MazeData 中，`chest_unlocked` 信号不需要携带位置。Win Condition 的 `initialize()` 从 MazeData 读取 | — | Resolved |
 | OQ-3 | 是否需要记录"宝箱在第几 tick 被激活"和"在第几 tick 被开启"供 Result Screen 展示？可以为观战增加数据维度 | Low | 推迟到 Result Screen 设计时决定 |
 | OQ-4 | 信号连接顺序：Key Collection 和 Win Condition 都监听 `mover_moved`。需要确保 Key Collection 先处理（触发 `chest_unlocked`），Win Condition 后处理（读取已更新的状态）。Godot 的信号连接顺序取决于 `connect()` 调用顺序——是否需要显式指定优先级？ | Medium | Resolved — `pending_openers` + `call_deferred` 批量判定机制使得 Phase 3 内部不需要强制连接顺序。Win Condition 的最终判定延迟到帧末尾执行，此时所有 `mover_moved` 和 `chest_unlocked` 处理均已完成。详见 Core Rule #17-19 和 Grid Movement GDD Tick Phase Model |
