@@ -2,7 +2,7 @@
 
 > **Status**: Approved
 > **Author**: design-system agent
-> **Last Updated**: 2026-04-03
+> **Last Updated**: 2026-04-04
 > **System Index**: #10
 > **Layer**: Feature
 > **Implements Pillar**: Simple Rules Deep Play, Fair Racing
@@ -60,7 +60,7 @@ Win Condition / Chest 是判定比赛胜负的终局系统。当任意一方 Age
 
 17. Win Condition 与 Key Collection 都在 Tick Phase Model 的 Phase 3（Reaction）中监听 `mover_moved` 信号。虽然 Phase 3 的监听者通常无顺序依赖（见 Grid Movement GDD Tick Phase Model），但存在一个间接依赖：Key Collection 的 `chest_unlocked` 信号可能在同一 Phase 3 中触发 Win Condition 激活宝箱和标记 Agent 资格。如果 Win Condition 的 `mover_moved` handler 在 Key Collection 之前执行，宝箱可能尚未 Active / Agent 尚未 Eligible，导致本 tick 错过判定
 18. 该风险已被 `pending_openers` + `call_deferred` 批量判定机制消除：Win Condition 不在 `mover_moved` handler 中立即调用 `finish_match()`，而是在当前帧末尾（`call_deferred`）统一判定。此时 Phase 3 的所有信号处理（包括 Key Collection 的 `chest_unlocked` → Win Condition 的资格更新）均已完成。因此 Phase 3 内部不需要强制连接顺序
-19. 此外，Maze Generator 保证 Crystal Key 和 Chest 位于不同 cell（`is_valid()` 验证 6 个标记位置互不重复），因此"同一次 `mover_moved` 同时触发 Crystal 拾取和宝箱开启"在结构上不可能发生——Agent 拾取 Crystal 后至少需要一次额外移动才能到达 Chest
+19. 此外，Maze Generator 保证 Crystal Key 和 Chest 位于不同 cell（`is_valid()` 验证 6 个标记位置互不重复——见 `maze-data-model.md`），因此"同一次 `mover_moved` 同时触发 Crystal 拾取和宝箱开启"在结构上不可能发生——Agent 拾取 Crystal 后至少需要一次额外移动才能到达 Chest
 
 **生命周期**
 
@@ -259,6 +259,7 @@ Win Condition 是一个纯规则判定系统，自身几乎没有可调参数—
 - 宝箱开启动画是比赛中最有戏剧性的时刻——视觉和音效应该比钥匙拾取更有仪式感
 - 金蛋不需要独立的渲染逻辑或数据模型，它是宝箱开启动画的嵌入元素
 - **时序契约**：`chest_opened` 信号发出后 `finish_match()` 立即调用。Match 根脚本收到 `match_finished` 后立即切换到 Result 场景——Match Renderer 不播放终局动画，终局表现由 Result Screen 负责。逻辑层与渲染层解耦，与 Grid Movement 的设计一致（逻辑即时更新，渲染异步追赶）
+
 
 ## Acceptance Criteria
 

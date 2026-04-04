@@ -2,7 +2,7 @@
 
 > **Status**: Approved
 > **Author**: design-system agent
-> **Last Updated**: 2026-04-03
+> **Last Updated**: 2026-04-04
 > **System Index**: #5
 > **Layer**: Core
 > **Implements Pillar**: Fair Racing, Simple Rules Deep Play
@@ -111,7 +111,7 @@ GridMovementManager:
   get_blocked_count(mover_id) -> int
 
   # --- 生命周期 ---
-  initialize()                       # 从已持有的 maze/fog 引用读取 spawn 点，创建 Mover，记录初始位置，调用 fog.update_vision() 触发初始视野
+  initialize()                       # 从已持有的 maze/fog 引用读取 spawn 点，创建 Mover，记录初始位置，调用 fog.update_vision() 触发初始视野。maze 引用在 COUNTDOWN 前由 MSM 注入（通过 MSM.get_maze() 或 state_changed 信号传递）
   reset()                          # 清空所有 Mover 数据
 ```
 
@@ -162,7 +162,8 @@ NONE  -> (0, 0)
 
 ```
 initialize():
-  # maze 和 fog 为构造时注入的引用（Godot @export 或 @onready），已在场景就绪时绑定
+  # maze 引用在 COUNTDOWN 前由 MSM 注入（通过 maze_generated 信号或 MSM.get_maze()）
+  # fog 引用通过 @export 节点引用或 @onready 场景树查找绑定
   for mover in movers:
     var spawn_marker = SPAWN_A if mover.id == 0 else SPAWN_B
     mover.position = maze.get_marker_position(spawn_marker)
@@ -178,7 +179,7 @@ initialize():
 
 **设计说明**：
 
-- **依赖注入**：`maze` 和 `fog` 引用在场景就绪时绑定（Godot `@export` 节点引用或 `@onready` 场景树查找），`initialize()` 从已持有的引用读取，无需参数传入。这与 LLM Agent Integration 持有 `maze`, `movement`, `fog` 引用的模式一致
+- **依赖注入**：`maze` 引用在 COUNTDOWN 前由 MSM 注入——Grid Movement 监听 `maze_generated` 信号或在 COUNTDOWN handler 中调用 `MSM.get_maze()` 获取 finalized MazeData 实例。`fog` 引用通过 Godot `@export` 节点引用或 `@onready` 场景树查找绑定。`initialize()` 从已持有的引用读取，无需参数传入。这与 LLM Agent Integration 持有 `maze`, `movement`, `fog` 引用的模式一致
 - **初始化顺序**：初始视野计算放在 `initialize()` 末尾而非由 FoW 自行监听 `state_changed(COUNTDOWN)`，是因为 FoW 的 `update_vision()` 依赖 Mover 已经就位——如果 FoW 先于 Grid Movement 处理 COUNTDOWN 信号，Mover 位置还是 `(-1, -1)`。由 Grid Movement 在就位后主动通知 FoW，保证了正确的初始化顺序
 
 ### Interactions with Other Systems

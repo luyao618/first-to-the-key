@@ -192,7 +192,7 @@ global_phase =
 | 比赛开始时 MazeData 中缺少某个钥匙 marker（如 `KEY_JADE` 位置未设置） | `initialize()` 时检测到缺失，打印错误日志。该钥匙的位置为 `(-1, -1)`，任何 Agent 永远无法到达该坐标，游戏卡在该阶段无法推进 | 不崩溃，但游戏无法正常完成。这是 Maze Generator 的 bug——`MazeData.is_valid()` 应拦截此情况 |
 | `mover_moved` 信号在非 PLAYING 状态下到达 Key Collection | 忽略，不处理拾取判定 | 只在 PLAYING 状态下处理游戏逻辑，与 Grid Movement 的设计保持一致 |
 | Agent 被 `initialize()` 放置在 Spawn 点，而 Spawn 点恰好就是 Brass Key 所在 cell | **无效地图——Maze Generator bug**。Generator 明确禁止将 marker 放在 Spawn 点所在 cell（Maze Generator 规则 #8.1）。若此情况出现，应视为上游生成错误。防御性处理：不自动拾取（拾取仅由 `mover_moved` 信号触发，`initialize()` 不触发 `mover_moved`）。注意：`MazeData.is_valid()` 不检查此约束（它只验证边界封闭、必要标记存在、连通性），拦截责任在 Generator 的放置规则 | 拾取判定严格绑定移动事件，初始放置不算移动。上游 Generator 约束应确保此场景不发生 |
-| 所有钥匙放置在同一个 cell 上 | **无效地图——Maze Generator bug**。Generator 明确禁止将 marker 放在已有其他 marker 的 cell 上（Maze Generator 规则 #8.2，每个 marker 独占一个 cell）。MazeData 数据模型本身允许同一 cell 持有多个不同类型的 marker（Maze Data Model 规则 #5），拦截责任在 Generator 而非数据模型。防御性处理：Agent 到达该 cell 时仅拾取 `next_key` 匹配的那把，行为与正常拾取一致 | 上游 Generator 约束保证钥匙分散放置，Key Collection 不需要为此场景做特殊处理。保留描述仅作为防御性编程参考 |
+| 所有钥匙放置在同一个 cell 上 | **无效地图——Maze Generator bug**。Generator 明确禁止将 marker 放在已有其他 marker 的 cell 上（Maze Generator 规则 #8.2，每个 marker 独占一个 cell）。**`MazeData.is_valid()` 现已校验 6 个标记位置互不重复**（见 `maze-data-model.md`），作为最终安全网。MazeData 数据模型本身允许同一 cell 持有多个不同类型的 marker（Maze Data Model 规则 #5），但 `is_valid()` 会拒绝此状态。防御性处理：Agent 到达该 cell 时仅拾取 `next_key` 匹配的那把，行为与正常拾取一致 | 上游 Generator 约束保证钥匙分散放置，`is_valid()` 兜底校验。Key Collection 不需要为此场景做特殊处理 |
 | `key_activated` 信号发出时，另一个 Agent 恰好已经站在新激活钥匙的 cell 上 | 不自动拾取。必须等该 Agent 下次 `mover_moved` 才会重新检查。但如果 Agent 原地不动（撞墙或不移动），不会触发 `mover_moved`，需要移开再回来 | 与上一条一致——拾取判定只在移动成功时触发。这创造了一个微妙的策略空间：如果 AI 停在一个位置等待，可能错过"恰好出现在脚下"的钥匙 |
 
 ## Dependencies
