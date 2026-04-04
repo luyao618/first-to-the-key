@@ -13,7 +13,7 @@ Prompt Input 是 Match 场景内的 **UI 侧栏面板**，在 Match State Manage
 
 输入流程采用**轮流制**：P1 先在左侧面板编写 prompt 并点击 "Ready"，然后右侧面板切换为 P2 的输入界面，P2 写完后点击 "Ready"，系统自动触发 `MatchStateManager.start_countdown()` 进入倒计时。文本框提供 placeholder 示例 prompt 帮助新手理解"该写什么"，空 prompt 也是合法输入（LLM 将使用默认行为）。
 
-API 配置（endpoint / api_key / model）不由本系统管理——从外部配置文件读取，Prompt Input 只专注于"写 prompt"这一件事。MVP 阶段仅支持 Agent vs Agent 模式的赛前 prompt 输入，不支持赛中消息发送。当 Match State Manager 离开 SETUP 状态时，Prompt Input overlay 自动隐藏。
+API 配置（endpoint / api_key / model / temperature 等）不由本系统管理——由 `MatchStateManager.start_setup()` 从外部配置文件读取并写入 `MatchConfig.llm_config_a/b`（见 match-state-manager.md `AgentLLMConfig` 定义），Prompt Input 只专注于"写 prompt"这一件事。MVP 阶段仅支持 Agent vs Agent 模式的赛前 prompt 输入，不支持赛中消息发送。当 Match State Manager 离开 SETUP 状态时，Prompt Input overlay 自动隐藏。
 
 ## Player Fantasy
 
