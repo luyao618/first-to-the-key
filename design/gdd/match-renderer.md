@@ -2,14 +2,14 @@
 
 > **Status**: Approved
 > **Author**: design-system agent
-> **Last Updated**: 2026-04-03
+> **Last Updated**: 2026-04-04
 > **System Index**: #11
 > **Layer**: Presentation
 > **Implements Pillar**: Simple Rules Deep Play, Information Trade-off
 
 ## Overview
 
-Match Renderer 是将比赛状态可视化的 Presentation 层系统。它从 Maze Data Model 读取迷宫结构，从 Grid Movement 获取 Agent 位置和移动事件，从 Fog of War 查询可见性状态，从 Key Collection 和 Win Condition 获取钥匙/宝箱的激活与拾取状态，将所有信息组合渲染到屏幕上。MVP 阶段仅支持 Agent vs Agent 模式的 **God View**——人类观察者看到完整迷宫，两个 Agent 的实时位置和所有标记物（钥匙、宝箱）均可见，不受 Fog of War 限制。渲染架构分为三层：底层用 Godot TileMap 绘制墙壁和通道的静态网格，中间层用 Sprite 节点渲染钥匙、宝箱等可交互标记物（带浮动/激活/拾取动画），顶层用 Sprite 节点渲染两个 Agent（带移动补间和撞墙抖动动画）。逻辑与渲染解耦——游戏逻辑层（Grid Movement 等）立即更新坐标，Match Renderer 异步播放补间动画追赶逻辑位置，确保视觉流畅而不阻塞 tick 节奏。摄像机固定，自动缩放适配迷宫到屏幕可视区域。未来 Player vs Player 模式需要的 Agent FoW 视图（分屏/画中画）不在 MVP 范围内，但渲染架构应预留扩展空间。
+Match Renderer 是将比赛状态可视化的 Presentation 层系统。它从 Maze Data Model 读取迷宫结构，从 Grid Movement 获取 Agent 位置和移动事件，从 Fog of War 查询可见性状态，从 Key Collection 和 Win Condition 获取钥匙/宝箱的激活与拾取状态，将所有信息组合渲染到屏幕上。Match Renderer 渲染在 Match 场景三栏布局的**中栏**（~60% 屏幕宽度）内，摄像机自动缩放适配中栏可视区域。MVP 阶段仅支持 Agent vs Agent 模式的 **God View**——人类观察者看到完整迷宫，两个 Agent 的实时位置和所有标记物（钥匙、宝箱）均可见，不受 Fog of War 限制。Match Renderer 在 SETUP 阶段即完成迷宫渲染（收到 Maze Generator 的 `maze_generated` 信号后调用 `initialize(maze)`），作为 God View 背景供玩家在 Prompt Input 界面参考迷宫结构编写策略。渲染架构分为三层：底层用 Godot TileMap 绘制墙壁和通道的静态网格，中间层用 Sprite 节点渲染钥匙、宝箱等可交互标记物（带浮动/激活/拾取动画），顶层用 Sprite 节点渲染两个 Agent（带移动补间和撞墙抖动动画）。逻辑与渲染解耦——游戏逻辑层（Grid Movement 等）立即更新坐标，Match Renderer 异步播放补间动画追赶逻辑位置，确保视觉流畅而不阻塞 tick 节奏。未来 Player vs Player 模式需要的 Agent FoW 视图（分屏/画中画）不在 MVP 范围内，但渲染架构应预留扩展空间。
 
 ## Player Fantasy
 
@@ -64,14 +64,14 @@ Match Renderer 是将比赛状态可视化的 Presentation 层系统。它从 Ma
 **摄像机**
 
 18. 使用 Godot Camera2D，固定位置，居中于迷宫中心
-19. 自动缩放：根据迷宫像素尺寸和屏幕分辨率计算 zoom 值，确保整个迷宫适配屏幕可视区域（留 margin）
-20. `zoom = min(screen_width / maze_pixel_width, screen_height / maze_pixel_height) * (1.0 - margin_ratio)`
+19. 自动缩放：根据迷宫像素尺寸和**中栏可视区域**（Match 场景三栏布局的中栏 ~60% 宽度 × 全高度）计算 zoom 值，确保整个迷宫适配中栏区域（留 margin）。Match Renderer 渲染在中栏容器内，不侵入左右栏
+20. `zoom = min(center_width / maze_pixel_width, screen_height / maze_pixel_height) * (1.0 - margin_ratio)`
 
 **生命周期**
 
-21. Match Renderer 监听 Match State Manager 的 `state_changed` 信号管理生命周期：
-    - SETUP → COUNTDOWN：`initialize(maze)` 构建 TileMap，放置 Marker Sprites，放置 Agent Sprites 到 Spawn 点，设置摄像机
-    - COUNTDOWN → PLAYING：显示倒计时动画（3-2-1-GO），倒计时结束后动画消失
+21. Match Renderer 监听 Match State Manager 的 `state_changed` 信号和 Maze Generator 的 `maze_generated` 信号管理生命周期：
+    - SETUP 阶段（`maze_generated` 信号）：`initialize(maze)` 构建 TileMap，放置 Marker Sprites（仅 Brass Key 可见），放置 Agent Sprites 到 Spawn 点，设置摄像机。**此时迷宫即为 God View 背景，供玩家在 Prompt Input 阶段参考迷宫结构**
+    - COUNTDOWN：显示倒计时动画（3-2-1-GO）叠加在已渲染的迷宫上，倒计时结束后动画消失
     - PLAYING：持续响应移动/拾取/激活事件播放对应动画（Agent 移动、钥匙激活/拾取、宝箱激活）
     - PLAYING → FINISHED：不播放终局动画。Match 根脚本收到 `match_finished` 后立即调用 `SceneManager.go_to("result")` 切换到 Result 场景，终局表现（胜负展示、统计数据）由 Result Screen 负责。Renderer 在场景切换时随 Match 场景一起销毁
 
@@ -110,6 +110,7 @@ MatchRenderer (Node2D):
 
   # --- 信号监听（不发出信号，纯消费端）---
   # 监听 Match State Manager: state_changed
+  # 监听 Maze Generator: maze_generated (SETUP 阶段触发 initialize)
   # 监听 Grid Movement: mover_moved, mover_blocked, mover_stayed
   # 监听 Key Collection: key_collected, key_activated
   # 监听 Win Condition: chest_activated, chest_opened
@@ -134,8 +135,8 @@ Match Renderer 自身没有独立状态机——它的行为完全由 Match Stat
 
 | Match State | Renderer Behavior |
 |-------------|-------------------|
-| **SETUP** | 无渲染。等待 `state_changed` 信号 |
-| **COUNTDOWN** | `initialize(maze)` 构建完整渲染场景。显示倒计时动画（3-2-1-GO）。Agent 和标记物可见但静止 |
+| **SETUP** | 等待 `maze_generated` 信号。收到后调用 `initialize(maze)` 构建完整渲染场景（TileMap + Spawn 标记 + Brass Key）。**迷宫作为 God View 背景可见，供 Prompt Input 阶段参考** |
+| **COUNTDOWN** | 在已渲染的迷宫上叠加显示倒计时动画（3-2-1-GO）。Agent 和标记物可见但静止 |
 | **PLAYING** | 活跃渲染：响应 `mover_moved`/`mover_blocked` 播放 Agent 动画，响应 `key_activated`/`key_collected` 播放钥匙动画，响应 `chest_activated` 播放宝箱出现动画。注意：`chest_opened` 信号与 `finish_match()` 在同一 tick 内触发，Match 根脚本随后立即切换到 Result 场景，宝箱开启动画可能无法播放完毕——终局表现由 Result Screen 负责 |
 | **FINISHED** | 不播放终局动画。Match 根脚本收到 `match_finished` 后立即切换到 Result 场景，Renderer 随 Match 场景销毁。终局表现由 Result Screen 负责 |
 
@@ -173,6 +174,7 @@ IDLE → BUMPING → IDLE
 | System | Direction | Interface | Data Flow |
 |--------|-----------|-----------|-----------|
 | **Maze Data Model** | Renderer depends on this | `get_cell()`, `has_wall()`, `get_marker_position()` | `initialize()` 时遍历所有 cell 构建 TileMap，读取标记位置放置 Sprite 节点 |
+| **Maze Generator** | Renderer depends on this | 监听 `maze_generated(maze)` 信号 | SETUP 阶段迷宫生成完毕后触发 `initialize(maze)`，确保玩家在 Prompt Input 界面时已能看到 God View |
 | **Grid Movement** | Renderer depends on this | 监听 `mover_moved`, `mover_blocked`, `mover_stayed` 信号；查询 `get_position()` | 移动事件驱动 Agent 动画；查询当前位置用于 Sprite 初始定位 |
 | **Fog of War / Vision** | Renderer depends on this | `get_cell_visibility(agent_id, x, y)` | MVP（God View）不使用。未来 Agent View 模式下查询可见性状态决定 cell 渲染方式（Unknown/Explored/Visible） |
 | **Key Collection** | Renderer depends on this | 监听 `key_activated`, `key_collected` 信号；查询 `is_key_active()`, `get_agent_progress()` | `key_activated`：触发钥匙出现动画。`key_collected`：触发钥匙拾取动画 + 半透明化。`is_key_active()`：`initialize()` 时判断哪些钥匙应初始可见（Brass 在比赛开始时已 Active） |
@@ -199,7 +201,8 @@ pixel_pos = grid_pos * cell_size + cell_size / 2
 ```
 maze_pixel_width = maze_width * cell_size
 maze_pixel_height = maze_height * cell_size
-fit_zoom = min(screen_width / maze_pixel_width, screen_height / maze_pixel_height)
+center_width = viewport_width * (1.0 - 2 * panel_ratio)    # 中栏宽度（三栏布局 ~60%）
+fit_zoom = min(center_width / maze_pixel_width, screen_height / maze_pixel_height)
 zoom = fit_zoom * (1.0 - margin_ratio)
 ```
 
@@ -207,15 +210,19 @@ zoom = fit_zoom * (1.0 - margin_ratio)
 |----------|------|-------|--------|-------------|
 | maze_width, maze_height | int | 2 to 50 | MazeData | 迷宫网格尺寸 |
 | cell_size | int | 16 to 128 | RenderConfig | 每个 cell 的像素边长 |
-| screen_width, screen_height | int | — | Viewport | 屏幕分辨率 |
+| viewport_width | int | 1024 - 3840 | Viewport | 游戏窗口宽度（像素） |
+| panel_ratio | float | 0.15 - 0.25 | 配置文件 | 左右栏占窗口宽度的比例（默认 0.20） |
+| center_width | float | 计算结果 | — | 中栏宽度（像素），即迷宫的可用渲染宽度 |
+| screen_height | int | — | Viewport | 屏幕高度 |
 | margin_ratio | float | 0.0 to 0.2 | RenderConfig | 边缘留白比例 |
 | zoom | float | 0.1+ | 计算结果 | Camera2D 的 zoom 值 |
 
-**示例计算**（15x15 迷宫，cell_size = 32，屏幕 1920x1080，margin = 0.1）：
+**示例计算**（15x15 迷宫，cell_size = 32，屏幕 1920x1080，panel_ratio = 0.20，margin = 0.1）：
 ```
 maze_pixel_width = 15 * 32 = 480
 maze_pixel_height = 15 * 32 = 480
-fit_zoom = min(1920/480, 1080/480) = min(4.0, 2.25) = 2.25
+center_width = 1920 * (1.0 - 2 * 0.20) = 1920 * 0.6 = 1152
+fit_zoom = min(1152/480, 1080/480) = min(2.4, 2.25) = 2.25
 zoom = 2.25 * 0.9 = 2.025
 ```
 
@@ -271,7 +278,7 @@ y_offset = sin(time * 2π / float_anim_period) * float_anim_amplitude
 | **Fog of War / Vision** | Match Renderer depends on this | MVP 不使用（God View 不经过 FoW）。未来 Agent View 模式下查询 `get_cell_visibility(agent_id, x, y)` 决定 cell 渲染方式（Unknown = 黑色遮挡，Explored = 半透明灰色，Visible = 完全显示）。**注意**：FoW 不负责 marker 激活过滤——标记物可见性由 Renderer 直接查询 KeyCollection / WinCondition 判断 |
 | **Key Collection** | Match Renderer depends on this | 监听 `key_activated(key_type)` 触发钥匙出现动画，监听 `key_collected(agent_id, key_type)` 触发拾取动画。查询 `is_key_active(key_type)` 用于初始化时判断哪些钥匙可见和运行时过滤 Inactive 钥匙（**此过滤由 Renderer 执行，FoW 不参与**），查询 `get_agent_progress(agent_id)` 判断钥匙半透明状态 |
 | **Win Condition / Chest** | Match Renderer depends on this | 监听 `chest_activated` 触发宝箱出现动画（淡入 + 光柱），监听 `chest_opened(agent_id)` 触发开启动画（盖弹开 + 金蛋）。查询 `is_chest_active()` 用于初始化时判断宝箱是否可见和运行时过滤 Inactive 宝箱（**此过滤由 Renderer 执行，FoW 不参与**） |
-| **Match State Manager** | Match Renderer depends on this | 监听 `state_changed(old, new)` 驱动渲染生命周期（COUNTDOWN 初始化、PLAYING 活跃渲染）。FINISHED 状态不播放终局动画——Match 根脚本收到 `match_finished` 后立即切换到 Result 场景，Renderer 随场景销毁。读取 `tick_interval` 配置计算 `move_anim_duration` |
+| **Match State Manager** | Match Renderer depends on this | 监听 `state_changed(old, new)` 驱动渲染生命周期（SETUP 阶段等待迷宫、COUNTDOWN 叠加倒计时、PLAYING 活跃渲染）。FINISHED 状态不播放终局动画——Match 根脚本收到 `match_finished` 后立即切换到 Result 场景，Renderer 随场景销毁。读取 `tick_interval` 配置计算 `move_anim_duration` |
 | **(无下游依赖)** | — | Match Renderer 是数据流终端，不发出信号，不被任何其他系统依赖 |
 
 ## Tuning Knobs
@@ -384,23 +391,24 @@ Match Renderer 本身不直接管理音效播放（建议由独立的 AudioManag
 
 | # | Criterion | Verification |
 |---|-----------|-------------|
-| AC-16 | 摄像机自动缩放使整个迷宫适配屏幕可视区域（留 margin） | 视觉测试：任意迷宫尺寸（2x2 到 50x50）均可完整显示 |
+| AC-16 | 摄像机自动缩放使整个迷宫适配中栏可视区域（~60% 屏幕宽度 × 全高度，留 margin） | 视觉测试：任意迷宫尺寸（2x2 到 50x50）均在中栏内完整显示，不侵入左右栏 |
 | AC-17 | 窗口 resize 后摄像机 zoom 重新计算 | 集成测试：运行中拖拽窗口大小，迷宫保持适配 |
 
 ### 生命周期
 
 | # | Criterion | Verification |
 |---|-----------|-------------|
-| AC-18 | COUNTDOWN 状态显示倒计时动画（3-2-1-GO） | 视觉测试 |
-| AC-19 | FINISHED 状态不播放终局动画，Match 根脚本收到 `match_finished` 后立即切换到 Result 场景 | 集成测试：`match_finished` 信号发出后确认 `SceneManager.go_to("result")` 被调用，Renderer 不启动任何新的 Tween |
-| AC-20 | `cleanup()` 正确移除所有渲染节点，不留残余 | 单元测试：cleanup 后 maze_layer、marker_layer、agent_layer 子节点数为 0 |
+| AC-18 | SETUP 阶段 `maze_generated` 信号到达后，`initialize(maze)` 完成渲染，迷宫 God View 作为 Prompt Input 的背景可见 | 视觉测试：进入 SETUP 后迷宫可见，玩家可参考迷宫结构写 prompt |
+| AC-19 | COUNTDOWN 状态在已渲染的迷宫上叠加显示倒计时动画（3-2-1-GO） | 视觉测试 |
+| AC-20 | FINISHED 状态不播放终局动画，Match 根脚本收到 `match_finished` 后立即切换到 Result 场景 | 集成测试：`match_finished` 信号发出后确认 `SceneManager.go_to("result")` 被调用，Renderer 不启动任何新的 Tween |
+| AC-21 | `cleanup()` 正确移除所有渲染节点，不留残余 | 单元测试：cleanup 后 maze_layer、marker_layer、agent_layer 子节点数为 0 |
 
 ### 性能
 
 | # | Criterion | Verification |
 |---|-----------|-------------|
-| AC-21 | 50x50 迷宫 + 2 Agent + 所有标记物的单帧渲染在 16.6ms 内完成（60fps） | 性能测试：Godot Profiler 测量渲染帧时间 |
-| AC-22 | 所有配置值从外部配置读取，无硬编码 | 代码审查 |
+| AC-22 | 50x50 迷宫 + 2 Agent + 所有标记物的单帧渲染在 16.6ms 内完成（60fps） | 性能测试：Godot Profiler 测量渲染帧时间 |
+| AC-23 | 所有配置值从外部配置读取，无硬编码 | 代码审查 |
 
 ## Open Questions
 

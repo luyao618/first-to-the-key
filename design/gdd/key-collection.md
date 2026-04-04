@@ -9,7 +9,7 @@
 
 ## Overview
 
-Key Collection 是管理钥匙拾取进度和钥匙显现节奏的游戏规则系统。游戏中有三把钥匙（Brass、Jade、Crystal），它们**逐个显现**：开局只有 Brass Key 存在于迷宫中，当任意一方 Agent 拾取 Brass 后 Jade Key 才出现，任意一方拾取 Jade 后 Crystal Key 才出现，任意一方拾取 Crystal 后宝箱才出现。钥匙的出现是全局事件——对双方 Agent 都可见（受 Fog of War 限制）。但每个 Agent 拥有独立的拾取进度，必须按 Brass → Jade → Crystal 的固定顺序拾取：没拿到 Brass 就无法拾取 Jade，即使 Jade 已经存在于迷宫中。钥匙是"检查点"而非"消耗品"：A 拾取后钥匙仍保留在原位，B 到达同一位置也可以拾取。拾取判定纯粹基于位置——Agent 移动到钥匙所在 cell 时自动拾取当前进度对应的钥匙，无需额外操作，也不依赖 Fog of War 可见性（看不到也能捡）。当某个 Agent 集齐三把钥匙后，宝箱出现在迷宫中，Agent 需找到宝箱打开它获取金蛋才能赢得比赛（宝箱和金蛋的逻辑由 Win Condition / Chest 系统负责）。Key Collection 监听 Grid Movement 的 `mover_moved` 信号触发判定，从 MazeData 读取钥匙位置，是连接移动系统与胜利条件的桥梁。
+Key Collection 是管理钥匙拾取进度和钥匙显现节奏的游戏规则系统，作为 **Godot Autoload**（全局单例）注册，生命周期贯穿整个应用——场景切换后数据仍可读取（Result Screen 在独立场景中读取钥匙进度），`reset()` 或下一局 `initialize()` 时才清空。游戏中有三把钥匙（Brass、Jade、Crystal），它们**逐个显现**：开局只有 Brass Key 存在于迷宫中，当任意一方 Agent 拾取 Brass 后 Jade Key 才出现，任意一方拾取 Jade 后 Crystal Key 才出现，任意一方拾取 Crystal 后宝箱才出现。钥匙的出现是全局事件——对双方 Agent 都可见（受 Fog of War 限制）。但每个 Agent 拥有独立的拾取进度，必须按 Brass → Jade → Crystal 的固定顺序拾取：没拿到 Brass 就无法拾取 Jade，即使 Jade 已经存在于迷宫中。钥匙是"检查点"而非"消耗品"：A 拾取后钥匙仍保留在原位，B 到达同一位置也可以拾取。拾取判定纯粹基于位置——Agent 移动到钥匙所在 cell 时自动拾取当前进度对应的钥匙，无需额外操作，也不依赖 Fog of War 可见性（看不到也能捡）。当某个 Agent 集齐三把钥匙后，宝箱出现在迷宫中，Agent 需找到宝箱打开它获取金蛋才能赢得比赛（宝箱和金蛋的逻辑由 Win Condition / Chest 系统负责）。Key Collection 监听 Grid Movement 的 `mover_moved` 信号触发判定，从 MazeData 读取钥匙位置，是连接移动系统与胜利条件的桥梁。
 
 ## Player Fantasy
 
@@ -86,6 +86,8 @@ KeyCollectionManager:
   # --- 生命周期 ---
   initialize(maze: MazeData)       # 读取钥匙位置，重置并初始化所有状态（COUNTDOWN 时调用——包括 Rematch 后的新一局）
   reset()                          # 清空所有状态到默认值（仅在不经过 initialize 的异常退出场景使用）
+  # 注意：Key Collection 是 Autoload，FINISHED 后数据保持可读（Result Screen 跨场景读取钥匙进度），
+  # 直到下一局 initialize() 或显式 reset() 才清空
 ```
 
 **设计决策**：
@@ -138,6 +140,7 @@ NEED_BRASS → NEED_JADE → NEED_CRYSTAL → KEYS_COMPLETE
 | **Match HUD** | HUD → Keys | `get_agent_progress(agent_id)` | 显示双方钥匙拾取进度（如 3 格进度条） |
 | **LLM Information Format** | LLMFormat → Keys | `is_key_active(key_type)`, `get_agent_progress(agent_id)` | 将钥匙激活状态和 Agent 进度序列化给 LLM。LLMFormat 从 `get_agent_progress()` 推导 OBJECTIVE 文本（钥匙名或 "treasure chest"）和 keys_collected 数值 |
 | **Match State Manager** | Keys → MSM | 监听 `state_changed` 信号 | Key Collection 监听 MSM 的 `state_changed`：COUNTDOWN 时调用 `initialize(maze)` 读取钥匙位置并**重置所有内部状态**（global_phase 回到 BRASS_ACTIVE，所有 Agent 进度回到 NEED_BRASS），PLAYING 时启用拾取判定，FINISHED 时停止处理并**保持最终状态**（下游系统如 Result Screen、Match HUD、Match Renderer 在 FINISHED 后仍需读取钥匙进度）。Rematch 流程：`MatchStateManager.reset()` → `state_changed(_, SETUP)` → Maze Generator 生成新迷宫 → `state_changed(_, COUNTDOWN)` → Key Collection 的 `initialize()` 自动用新 MazeData 重置一切。不需要额外的显式 `reset()` 调用 |
+| **Result Screen** | Result → Keys | `get_agent_progress(agent_id)` | Result Screen 在独立场景中读取双方钥匙进度。Key Collection 作为 Autoload，场景切换后数据仍可读取，直到下一局 `initialize()` 才清空 |
 
 ## Formulas
 

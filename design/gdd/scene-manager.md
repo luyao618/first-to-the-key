@@ -2,14 +2,14 @@
 
 > **Status**: Approved
 > **Author**: design-system agent
-> **Last Updated**: 2026-04-01
+> **Last Updated**: 2026-04-04
 > **System Index**: #3
 > **Layer**: Foundation
 > **Implements Pillar**: Simple Rules Deep Play
 
 ## Overview
 
-Scene Manager 是管理游戏顶层场景切换的全局系统（Godot Autoload）。它维护一个场景注册表，提供场景跳转接口，并处理切换时的资源加载与释放。MVP 阶段游戏仅有两个顶层场景：**Match**（比赛主场景，涵盖 prompt 输入、倒计时、比赛进行的全部阶段，Prompt Input 作为 Match 场景内的 UI overlay 存在）和 **Result**（赛后结果展示）。游戏启动后直接进入 Match 场景，Match State Manager 驱动 SETUP->COUNTDOWN->PLAYING->FINISHED 状态流转，其中 SETUP 阶段迷宫已生成渲染完毕，玩家在 God View 背景上编写 prompt。比赛结束后切换到 Result 场景展示结果，玩家可选择重赛（返回 Match）或退出。Scene Manager 本身不管理 UI 层级或游戏逻辑——它只负责"当前屏幕上是哪个顶层场景"这一件事，场景内部的 UI overlay 切换由各场景自行管理。
+Scene Manager 是管理游戏顶层场景切换的全局系统（Godot Autoload）。它维护一个场景注册表，提供场景跳转接口，并处理切换时的资源加载与释放。MVP 阶段游戏仅有两个顶层场景：**Match**（比赛主场景，涵盖 prompt 输入、倒计时、比赛进行的全部阶段，Prompt Input 作为 Match 场景内的 UI overlay 存在）和 **Result**（赛后结果展示）。游戏启动后直接进入 Match 场景，Match State Manager 驱动 SETUP->COUNTDOWN->PLAYING->FINISHED 状态流转，其中 SETUP 阶段 Maze Generator 生成迷宫后 Match Renderer 立即渲染 God View（通过 `maze_generated` 信号触发 `initialize(maze)`），玩家在 God View 背景上编写 prompt。比赛结束后切换到 Result 场景展示结果，玩家可选择重赛（返回 Match）或退出。Scene Manager 本身不管理 UI 层级或游戏逻辑——它只负责"当前屏幕上是哪个顶层场景"这一件事，场景内部的 UI overlay 切换由各场景自行管理。
 
 ## Player Fantasy
 
@@ -32,7 +32,7 @@ Scene Manager 是玩家不会注意到的系统——除非它出问题。它塑
 7. Scene Manager 在切换前发出 `scene_changing(old_name, new_name)` 信号（此时旧场景仍存在于场景树中）。切换完成后发出 `scene_changed(new_name)` 信号——**`scene_changed` 仅在新场景成为 `get_tree().current_scene` 且其 `_ready()` 已执行完毕后才发出**，确保监听者可以安全访问新场景树。实现方式：使用 `await get_tree().tree_changed` 或 deferred call 确认新场景就绪
 8. Scene Manager 跟踪 `current_scene_name: String`，任何系统可查询当前处于哪个场景
 9. 游戏启动时，Scene Manager 自动跳转到配置文件中指定的 `initial_scene`（MVP 默认为 `"match"`）
-10. Scene Manager 不持有游戏数据——跨场景数据传递由其他 Autoload 系统负责（如 Match State Manager 持有比赛配置和结果）
+10. Scene Manager 不持有游戏数据——跨场景数据传递由其他 Autoload 系统负责（`MatchStateManager` 持有比赛配置和结果，`LLMAgentManager` 持有 API 统计，`KeyCollection` 持有钥匙进度——这三个 Autoload 在场景切换后数据仍可读取，Result Screen 依赖此特性）
 11. Scene Manager 不管理场景内部的 UI overlay 切换——Match 场景内 Prompt Input overlay 的显示/隐藏由 Match 场景自身根据 Match State Manager 的状态信号控制
 
 ### States and Transitions
@@ -99,8 +99,9 @@ Scene Manager 本身有两层状态：**自身的运行状态**和**它管理的
 2. Match 场景加载
    Match._ready() -> 连接 MatchStateManager 信号
    -> MatchStateManager.start_setup(config) -> Maze Generator 生成迷宫
-   -> 迷宫渲染完毕，Prompt Input overlay 显示
-   -> 玩家在 God View 背景上写 prompt
+   -> Maze Generator 发出 maze_generated 信号 -> Match Renderer.initialize(maze) 渲染迷宫
+   -> Prompt Input overlay 显示（左右栏显示输入界面，中栏已显示迷宫 God View）
+   -> 玩家参考迷宫结构编写 prompt
 
 3. 比赛开始
    Prompt 提交 -> MatchStateManager.start_countdown() -> 3-2-1-GO
@@ -114,6 +115,8 @@ Scene Manager 本身有两层状态：**自身的运行状态**和**它管理的
 
 5. Result 场景加载
    Result._ready() -> 从 MatchStateManager 读取 result/winner_id/config/elapsed_time
+   -> 从 LLMAgentManager 读取 API 统计（total_api_calls/total_tokens_used/total_idle_ticks）
+   -> 从 KeyCollection 读取钥匙进度（get_agent_progress）
    -> 展示比赛结果
 
 6. 重赛
