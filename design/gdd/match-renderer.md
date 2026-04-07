@@ -49,6 +49,7 @@ Match Renderer 是将比赛状态可视化的 Presentation 层系统。它从 Ma
 10. 标记物的可见性由对应系统的激活状态决定（**Renderer 自行查询，不通过 FoW**）：
     - 钥匙：`KeyCollection.is_key_active(key_type)` 为 true 时可见
     - 宝箱：`WinCondition.is_chest_active()` 为 true 时可见
+    - **SETUP 阶段例外**：`initialize()` 在 SETUP 阶段由 `maze_generated` 信号触发，此时 KeyCollection / WinCondition 尚未 `initialize()`（它们在 COUNTDOWN 才初始化）。因此 `initialize()` 使用**硬编码默认可见性**：仅 Brass Key 可见，Jade / Crystal / Chest 不可见——这与游戏规则的初始状态一致。PLAYING 阶段开始后，Renderer 通过信号（`key_activated` / `chest_activated`）驱动后续可见性变化，不再需要主动查询 `is_key_active()` / `is_chest_active()`
     - 注意：FoW 不负责 marker 激活状态过滤——FoW 只管理 cell 三态可见性。Renderer 在 God View 模式下直接查询 KeyCollection / WinCondition 判断标记物是否渲染。未来 Agent View 模式下需额外叠加 FoW 可见性判断
 11. 标记物位置固定（从 MazeData marker 位置转换为像素坐标），不移动
 12. Active 标记物播放轻微上下浮动的循环动画（Tween 或 AnimationPlayer）
@@ -69,8 +70,8 @@ Match Renderer 是将比赛状态可视化的 Presentation 层系统。它从 Ma
 
 **生命周期**
 
-21. Match Renderer 监听 Match State Manager 的 `state_changed` 信号和 Maze Generator 的 `maze_generated` 信号管理生命周期：
-    - SETUP 阶段（`maze_generated` 信号）：`initialize(maze)` 构建 TileMap，放置 Marker Sprites（仅 Brass Key 可见），放置 Agent Sprites 到 Spawn 点，设置摄像机。**此时迷宫即为 God View 背景，供玩家在 Prompt Input 阶段参考迷宫结构**
+21. Match Renderer 监听 Match State Manager 的 `state_changed` 和 `maze_ready` 信号管理生命周期。**迷宫数据从 MSM 获取**（`MatchStateManager.get_maze()`），MSM 是迷宫实例在比赛生命周期中的唯一持有者：
+    - SETUP 阶段：Renderer 监听 MSM 的 `maze_ready` 信号（MSM 收到 `maze_generated` 后写入 `current_maze` 并发出），调用 `initialize(MatchStateManager.get_maze())` 构建 TileMap。**Renderer 不直接监听 Maze Generator 的 `maze_generated` 信号**——通过 MSM 中转，确保迷宫所有权语义一致。放置 Marker Sprites（**使用硬编码默认可见性：仅 Brass Key 可见**，Jade / Crystal / Chest 隐藏——此时 KeyCollection / WinCondition 尚未初始化，不查询其运行时状态），放置 Agent Sprites 到 Spawn 点，设置摄像机。**此时迷宫即为 God View 背景，供玩家在 Prompt Input 阶段参考迷宫结构**
     - COUNTDOWN：显示倒计时动画（3-2-1-GO）叠加在已渲染的迷宫上，倒计时结束后动画消失
     - PLAYING：持续响应移动/拾取/激活事件播放对应动画（Agent 移动、钥匙激活/拾取、宝箱激活）
     - PLAYING → FINISHED：不播放终局动画。Match 根脚本收到 `match_finished` 后立即调用 `SceneManager.go_to("result")` 切换到 Result 场景，终局表现（胜负展示、统计数据）由 Result Screen 负责。Renderer 在场景切换时随 Match 场景一起销毁
@@ -109,8 +110,7 @@ MatchRenderer (Node2D):
   countdown_label: Label             # 倒计时文字（3-2-1-GO）
 
   # --- 信号监听（不发出信号，纯消费端）---
-  # 监听 Match State Manager: state_changed
-  # 监听 Maze Generator: maze_generated (SETUP 阶段触发 initialize)
+  # 监听 Match State Manager: state_changed（驱动生命周期）, maze_ready（SETUP 阶段迷宫就绪通知）
   # 监听 Grid Movement: mover_moved, mover_blocked, mover_stayed
   # 监听 Key Collection: key_collected, key_activated
   # 监听 Win Condition: chest_activated, chest_opened
@@ -135,7 +135,7 @@ Match Renderer 自身没有独立状态机——它的行为完全由 Match Stat
 
 | Match State | Renderer Behavior |
 |-------------|-------------------|
-| **SETUP** | 等待 `maze_generated` 信号。收到后调用 `initialize(maze)` 构建完整渲染场景（TileMap + Spawn 标记 + Brass Key）。**迷宫作为 God View 背景可见，供 Prompt Input 阶段参考** |
+| **SETUP** | 监听 MSM 的 `maze_ready` 信号，收到后调用 `initialize(get_maze())` 构建完整渲染场景（TileMap + Spawn 标记 + Brass Key，使用硬编码默认可见性，不查询 KeyCollection / WinCondition）。**迷宫作为 God View 背景可见，供 Prompt Input 阶段参考** |
 | **COUNTDOWN** | 在已渲染的迷宫上叠加显示倒计时动画（3-2-1-GO）。Agent 和标记物可见但静止 |
 | **PLAYING** | 活跃渲染：响应 `mover_moved`/`mover_blocked` 播放 Agent 动画，响应 `key_activated`/`key_collected` 播放钥匙动画，响应 `chest_activated` 播放宝箱出现动画。注意：`chest_opened` 信号与 `finish_match()` 在同一 tick 内触发，Match 根脚本随后立即切换到 Result 场景，宝箱开启动画可能无法播放完毕——终局表现由 Result Screen 负责 |
 | **FINISHED** | 不播放终局动画。Match 根脚本收到 `match_finished` 后立即切换到 Result 场景，Renderer 随 Match 场景销毁。终局表现由 Result Screen 负责 |
@@ -174,11 +174,11 @@ IDLE → BUMPING → IDLE
 | System | Direction | Interface | Data Flow |
 |--------|-----------|-----------|-----------|
 | **Maze Data Model** | Renderer depends on this | `get_cell()`, `has_wall()`, `get_marker_position()` | `initialize()` 时遍历所有 cell 构建 TileMap，读取标记位置放置 Sprite 节点 |
-| **Maze Generator** | Renderer depends on this | 监听 `maze_generated(maze)` 信号 | SETUP 阶段迷宫生成完毕后触发 `initialize(maze)`，确保玩家在 Prompt Input 界面时已能看到 God View |
+| **Maze Generator** | 无直接依赖 | — | **Renderer 不直接监听 Maze Generator 的信号**。迷宫数据通过 MSM 中转：MSM 收到 `maze_generated` 后存储到 `current_maze`，Renderer 从 `MSM.get_maze()` 获取。这确保 MSM 是迷宫实例的唯一持有者 |
 | **Grid Movement** | Renderer depends on this | 监听 `mover_moved`, `mover_blocked`, `mover_stayed` 信号；查询 `get_position()` | 移动事件驱动 Agent 动画；查询当前位置用于 Sprite 初始定位 |
 | **Fog of War / Vision** | Renderer depends on this | `get_cell_visibility(agent_id, x, y)` | MVP（God View）不使用。未来 Agent View 模式下查询可见性状态决定 cell 渲染方式（Unknown/Explored/Visible） |
-| **Key Collection** | Renderer depends on this | 监听 `key_activated`, `key_collected` 信号；查询 `is_key_active()`, `get_agent_progress()` | `key_activated`：触发钥匙出现动画。`key_collected`：触发钥匙拾取动画 + 半透明化。`is_key_active()`：`initialize()` 时判断哪些钥匙应初始可见（Brass 在比赛开始时已 Active） |
-| **Win Condition / Chest** | Renderer depends on this | 监听 `chest_activated`, `chest_opened` 信号；查询 `is_chest_active()` | `chest_activated`：触发宝箱出现动画（淡入 + 光柱）。`chest_opened`：触发宝箱开启动画（盖弹开 + 金蛋） |
+| **Key Collection** | Renderer depends on this | 监听 `key_activated`, `key_collected` 信号；查询 `is_key_active()`, `get_agent_progress()` | `key_activated`：触发钥匙出现动画。`key_collected`：触发钥匙拾取动画 + 半透明化。`is_key_active()`：**PLAYING 阶段**运行时过滤 Inactive 钥匙。注意：`initialize()` 在 SETUP 阶段调用，此时 KeyCollection 尚未初始化——初始可见性使用硬编码默认值（仅 Brass 可见），不查询 `is_key_active()` |
+| **Win Condition / Chest** | Renderer depends on this | 监听 `chest_activated`, `chest_opened` 信号；查询 `is_chest_active()` | `chest_activated`：触发宝箱出现动画（淡入 + 光柱）。`chest_opened`：触发宝箱开启动画（盖弹开 + 金蛋）。`is_chest_active()`：**PLAYING 阶段**运行时过滤 Inactive 宝箱。注意：`initialize()` 在 SETUP 阶段调用，此时 WinCondition 尚未初始化——初始宝箱可见性使用硬编码默认值（不可见），不查询 `is_chest_active()` |
 | **Match State Manager** | Renderer depends on this | 监听 `state_changed` 信号；查询 `get_tick_count()`, `get_elapsed_time()` | `state_changed`：驱动渲染生命周期（初始化/倒计时/活跃渲染）。FINISHED 状态不播放终局动画——Match 根脚本收到 `match_finished` 后立即切换到 Result 场景，Renderer 随场景销毁 |
 | **Match HUD** | HUD 与 Renderer 并行 | 无直接依赖 | 两者都是 Presentation 层，各自独立监听游戏系统信号。HUD 渲染叠加在 Renderer 之上（UI Canvas Layer） |
 
@@ -276,8 +276,8 @@ y_offset = sin(time * 2π / float_anim_period) * float_anim_amplitude
 | **Maze Data Model** | Match Renderer depends on this | `initialize()` 时遍历所有 cell 调用 `has_wall(x, y, dir)` 构建 TileMap，调用 `get_marker_position()` 获取标记物像素位置。运行时不再查询（迷宫结构不可变） |
 | **Grid Movement** | Match Renderer depends on this | 监听 `mover_moved(mover_id, old_pos, new_pos)` 播放移动补间动画，监听 `mover_blocked(mover_id, pos, dir)` 播放撞墙抖动，监听 `mover_stayed(mover_id, pos)` 确认无动画。查询 `get_position(mover_id)` 用于初始定位 |
 | **Fog of War / Vision** | Match Renderer depends on this | MVP 不使用（God View 不经过 FoW）。未来 Agent View 模式下查询 `get_cell_visibility(agent_id, x, y)` 决定 cell 渲染方式（Unknown = 黑色遮挡，Explored = 半透明灰色，Visible = 完全显示）。**注意**：FoW 不负责 marker 激活过滤——标记物可见性由 Renderer 直接查询 KeyCollection / WinCondition 判断 |
-| **Key Collection** | Match Renderer depends on this | 监听 `key_activated(key_type)` 触发钥匙出现动画，监听 `key_collected(agent_id, key_type)` 触发拾取动画。查询 `is_key_active(key_type)` 用于初始化时判断哪些钥匙可见和运行时过滤 Inactive 钥匙（**此过滤由 Renderer 执行，FoW 不参与**），查询 `get_agent_progress(agent_id)` 判断钥匙半透明状态 |
-| **Win Condition / Chest** | Match Renderer depends on this | 监听 `chest_activated` 触发宝箱出现动画（淡入 + 光柱），监听 `chest_opened(agent_id)` 触发开启动画（盖弹开 + 金蛋）。查询 `is_chest_active()` 用于初始化时判断宝箱是否可见和运行时过滤 Inactive 宝箱（**此过滤由 Renderer 执行，FoW 不参与**） |
+| **Key Collection** | Match Renderer depends on this | 监听 `key_activated(key_type)` 触发钥匙出现动画，监听 `key_collected(agent_id, key_type)` 触发拾取动画。查询 `is_key_active(key_type)` 用于**PLAYING 阶段**运行时过滤 Inactive 钥匙（**此过滤由 Renderer 执行，FoW 不参与**），查询 `get_agent_progress(agent_id)` 判断钥匙半透明状态。**`initialize()` 在 SETUP 阶段调用时不查询 `is_key_active()`——使用硬编码默认值（仅 Brass 可见），因为 KeyCollection 在 COUNTDOWN 才初始化** |
+| **Win Condition / Chest** | Match Renderer depends on this | 监听 `chest_activated` 触发宝箱出现动画（淡入 + 光柱），监听 `chest_opened(agent_id)` 触发开启动画（盖弹开 + 金蛋）。查询 `is_chest_active()` 用于**PLAYING 阶段**运行时过滤 Inactive 宝箱（**此过滤由 Renderer 执行，FoW 不参与**）。**`initialize()` 在 SETUP 阶段调用时不查询 `is_chest_active()`——使用硬编码默认值（不可见），因为 WinCondition 在 COUNTDOWN 才初始化** |
 | **Match State Manager** | Match Renderer depends on this | 监听 `state_changed(old, new)` 驱动渲染生命周期（SETUP 阶段等待迷宫、COUNTDOWN 叠加倒计时、PLAYING 活跃渲染）。FINISHED 状态不播放终局动画——Match 根脚本收到 `match_finished` 后立即切换到 Result 场景，Renderer 随场景销毁。读取 `tick_interval` 配置计算 `move_anim_duration` |
 | **(无下游依赖)** | — | Match Renderer 是数据流终端，不发出信号，不被任何其他系统依赖 |
 
@@ -398,7 +398,7 @@ Match Renderer 本身不直接管理音效播放（建议由独立的 AudioManag
 
 | # | Criterion | Verification |
 |---|-----------|-------------|
-| AC-18 | SETUP 阶段 `maze_generated` 信号到达后，`initialize(maze)` 完成渲染，迷宫 God View 作为 Prompt Input 的背景可见 | 视觉测试：进入 SETUP 后迷宫可见，玩家可参考迷宫结构写 prompt |
+| AC-18 | SETUP 阶段 MSM 的 `get_maze()` 返回有效实例后，`initialize(maze)` 完成渲染，迷宫 God View 作为 Prompt Input 的背景可见 | 视觉测试：进入 SETUP 后迷宫可见，玩家可参考迷宫结构写 prompt |
 | AC-19 | COUNTDOWN 状态在已渲染的迷宫上叠加显示倒计时动画（3-2-1-GO） | 视觉测试 |
 | AC-20 | FINISHED 状态不播放终局动画，Match 根脚本收到 `match_finished` 后立即切换到 Result 场景 | 集成测试：`match_finished` 信号发出后确认 `SceneManager.go_to("result")` 被调用，Renderer 不启动任何新的 Tween |
 | AC-21 | `cleanup()` 正确移除所有渲染节点，不留残余 | 单元测试：cleanup 后 maze_layer、marker_layer、agent_layer 子节点数为 0 |

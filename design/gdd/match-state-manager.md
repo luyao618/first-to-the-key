@@ -85,6 +85,8 @@ MatchStateManager:
   signal state_changed(old_state, new_state)
   signal tick(tick_count)           # 每个 tick 发出，携带当前 tick 编号
   signal match_finished(result)     # 比赛结束时发出，携带结果
+  signal maze_ready                 # SETUP 阶段迷宫生成完成，current_maze 已就绪（收到 maze_generated 后发出）
+  signal setup_failed(reason: String)  # SETUP 阶段迷宫生成失败时发出，UI 层据此显示错误并允许重新配置
 
   # --- 状态转移接口 ---
   start_setup(config: MatchConfig)  # 进入 Setup，加载配置
@@ -132,7 +134,7 @@ MatchStateManager:
 
 | State | Entry Condition | Behavior | Exit Condition |
 |-------|----------------|----------|----------------|
-| **SETUP** | `start_setup(config)` 或 `reset()` | 等待配置填充。Prompt Input UI 在此阶段活跃。Maze Generator 在此阶段生成迷宫，完成后通过 `maze_generated` 信号将 MazeData 实例写入 MSM 的 `current_maze` 字段 | `start_countdown()` 被调用（前置条件：配置完整且 `current_maze` 已 finalized） |
+| **SETUP** | `start_setup(config)` 或 `reset()` | 等待配置填充。Prompt Input UI 在此阶段活跃。Maze Generator 在此阶段生成迷宫，完成后通过 `maze_generated` 信号将 MazeData 实例写入 MSM 的 `current_maze` 字段。**若 Generator 发出 `generation_failed` 信号，MSM 发出 `setup_failed(reason)` 信号通知 UI 层显示错误，比赛不进入 COUNTDOWN** | `start_countdown()` 被调用（前置条件：配置完整且 `current_maze` 已 finalized） |
 | **COUNTDOWN** | `start_countdown()` | 显示倒计时（3-2-1-GO）。Agent 和玩家已就位但不可移动 | 倒计时结束，自动调用 `start_playing()` |
 | **PLAYING** | `start_playing()` | Tick 计时器启动，每隔 `tick_interval` 秒发出 `tick` 信号。Agent 可以移动，钥匙可以拾取 | `finish_match()` 被调用（Win Condition 触发） |
 | **FINISHED** | `finish_match(result, winner_id)` | Tick 停止。记录结果和胜利者。Match 根脚本监听 `match_finished` 后立即调用 `SceneManager.go_to("result")` 切换到 Result 场景展示比赛数据。FINISHED 阶段不在 Match 场景停留 | `reset()` 被调用（玩家在 Result 场景选择重赛或返回） |
@@ -142,7 +144,7 @@ MatchStateManager:
 | System | Direction | Interface | Data Flow |
 |--------|-----------|-----------|-----------|
 | **Prompt Input** | Prompt Input -> Manager | `start_setup()`, 写入 `config.prompt_a/b` | UI 收集 prompt 后填入配置，配置完成后触发 countdown |
-| **Maze Generator** | Manager -> Generator（通过信号） | `state_changed` 信号；`maze_generated` 信号 | Setup 阶段，Generator 监听信号开始生成迷宫。生成完成后 Generator 发出 `maze_generated(maze_data)` 信号，**MSM 接收并存储到 `current_maze` 字段**——此后所有系统从 MSM 获取迷宫引用（`get_maze()`），MSM 是迷宫实例在比赛生命周期中的唯一持有者 |
+| **Maze Generator** | Manager -> Generator（通过信号） | `state_changed` 信号；`maze_generated` 信号；`generation_failed` 信号 | Setup 阶段，Generator 监听信号开始生成迷宫。生成完成后 Generator 发出 `maze_generated(maze_data)` 信号，**MSM 接收并存储到 `current_maze` 字段，然后发出 `maze_ready` 信号**——此后所有系统从 MSM 获取迷宫引用（`get_maze()`），MSM 是迷宫实例在比赛生命周期中的唯一持有者。**若 Generator 发出 `generation_failed(retry_count, reason)` 信号，MSM 转发为 `setup_failed(reason)` 信号**，通知 Prompt Input 等 UI 系统显示错误提示并允许玩家修改配置（如迷宫尺寸）后重试 |
 | **LLM Agent Integration** | Agent -> Manager | 监听 `tick` 信号 | 每个 tick，Agent 系统读取信号执行一次 LLM 决策 + 移动 |
 | **Grid Movement** | Movement -> Manager | 監听 `tick` 信号，查询 `is_playing()` | 仅在 Playing 状态下处理移动请求 |
 
@@ -209,6 +211,7 @@ countdown_remaining = countdown_duration - (current_time - countdown_start_time)
 | Tick 计时器在 LLM API 延迟期间继续触发 | 正常触发 tick 信号。Agent 若无响应则原地等待（由 LLM Agent Integration 处理） | Tick 是全局心跳，不因单个 Agent 的延迟而暂停 |
 | 连续快速调用 `reset()` + `start_setup()` | 每次 `reset()` 完整清理状态后再执行 `start_setup()`，不会产生残留数据 | 支持快速重赛场景 |
 | 迷宫未就绪时调用 `start_countdown()` | 返回 `false`，打印警告日志 `"Cannot start countdown: MazeData not finalized"`。**调用方（Prompt Input）应处理返回值**——显示等待提示，在 `maze_generated` 信号到达后重试 | Setup -> Countdown 的前置条件要求 MazeData 已 finalized，防止在迷宫未生成完成时开赛。返回 bool 而非静默忽略，确保调用方可以做出反应 |
+| 迷宫生成失败（`generation_failed` 信号到达） | MSM 发出 `setup_failed(reason)` 信号，保持 SETUP 状态。Prompt Input 监听此信号显示错误提示（如"Failed to generate a fair maze. Please adjust maze size."），并允许玩家修改配置后点击 Ready 重新触发生成。**MSM 不自动退出 SETUP 或切换到其他状态** | 迷宫生成失败是 SETUP 阶段的合法错误路径（极端配置如迷宫太小或公平性 delta 为 0），需要有明确的 UI 反馈和恢复流程，不能卡死 |
 
 ## Dependencies
 

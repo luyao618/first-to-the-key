@@ -84,7 +84,7 @@ Match 场景采用固定三栏布局，**全程不变**——从 SETUP 到 PLAYI
 |-------|------|------|------|
 | **PLAYER_A_INPUT** | 标题 "Player 1"，文本框（带 placeholder），Ready 按钮 | "Waiting for Player 1..." | 等待 P1 输入 prompt 并点击 Ready |
 | **PLAYER_B_INPUT** | "Player 1 Ready ✓"（prompt 已锁定） | 标题 "Player 2"，文本框（带 placeholder），Ready 按钮 | P1 的 prompt 已暂存，等待 P2 输入 |
-| **COMPLETED** | — | — | 将 prompt_a / prompt_b 写入 MatchConfig，调用 `start_countdown()`。若 `start_countdown()` 返回 false（迷宫未就绪），显示等待提示并在 `maze_generated` 信号到达后自动重试 |
+| **COMPLETED** | — | — | 将 prompt_a / prompt_b 写入 MatchConfig，调用 `start_countdown()`。若 `start_countdown()` 返回 false（迷宫未就绪），显示等待提示并在 MSM 的 `maze_ready` 信号到达后自动重试。若收到 `MatchStateManager.setup_failed` 信号（迷宫生成失败），显示错误提示（如 "Failed to generate a fair maze. Please adjust settings."），回退到 `PLAYER_A_INPUT` 状态允许玩家修改配置后重试 |
 
 ### UI 元素
 
@@ -170,7 +170,7 @@ char_count = prompt_text.length()
 | P2 阶段 MatchStateManager 被外部调用 reset() | Prompt Input 监听 `state_changed` 信号，若状态变为 SETUP 则重置内部状态为 `PLAYER_A_INPUT`，清空暂存的 prompt | 防御性处理，虽然正常流程不应发生 |
 | 两个玩家输入完全相同的 prompt | 允许。正常写入 `prompt_a` 和 `prompt_b`，两个 Agent 使用相同策略 | 完全合法——玩家可能想测试同一策略在不同起点的表现 |
 | prompt 包含特殊字符（emoji、Unicode、换行符） | 原样存储和传递。文本框支持所有 Unicode 输入。换行符保留在 prompt 中 | LLM API 支持 Unicode 和换行符，不需要 UI 层过滤 |
-| MazeData 未 finalized 时 P2 点击 Ready | `start_countdown()` 返回 `false`（Match State Manager 拒绝）。Prompt Input 保持在 COMPLETED 状态但**不锁死**：左右栏显示"Waiting for maze generation..."等待提示，监听 Maze Generator 的 `maze_generated` 信号，收到后**自动重新调用** `start_countdown()`。实际不应发生——Scene Manager 的 Canonical Flow 保证 SETUP 阶段迷宫在 Prompt Input 显示前已生成完毕，此处为防御性处理 | 职责分离：Prompt Input 负责收集 prompt，Match State Manager 负责校验倒计时前置条件。防御性设计确保即使时序异常也不会卡死 |
+| MazeData 未 finalized 时 P2 点击 Ready | `start_countdown()` 返回 `false`（Match State Manager 拒绝）。Prompt Input 保持在 COMPLETED 状态但**不锁死**：左右栏显示"Waiting for maze generation..."等待提示，监听 MSM 的 `maze_ready` 信号，收到后**自动重新调用** `start_countdown()`。**若收到 `MatchStateManager.setup_failed` 信号（迷宫生成失败），显示错误提示并回退到 `PLAYER_A_INPUT` 状态**，允许玩家修改配置后重试。实际不应发生——Scene Manager 的 Canonical Flow 保证 SETUP 阶段迷宫在 Prompt Input 显示前已生成完毕，此处为防御性处理 | 职责分离：Prompt Input 负责收集 prompt，Match State Manager 负责校验倒计时前置条件。防御性设计确保即使迷宫生成失败也不会卡死 |
 | 配置文件中 API key 为空或无效 | Prompt Input 不检查 API 配置有效性。比赛开始后 LLM Agent Integration 处理 API 错误 | Prompt Input 只管 prompt 文本，API 配置不在其职责范围 |
 
 ## Dependencies
@@ -182,7 +182,7 @@ char_count = prompt_text.length()
 | **Match Renderer** | 共享三栏布局容器 | Prompt Input 在 SETUP 阶段管理左右栏内容，PLAYING 阶段 Match Renderer 在中栏渲染 God View。两者通过 Match State Manager 的 `state_changed` 信号协调切换时机 |
 | **Match HUD** | 共享三栏布局容器 | Match HUD 在 PLAYING 阶段使用左右栏显示钥匙进度和状态信息。Prompt Input 隐藏后 HUD 接管左右栏 |
 | **Result Screen** | 独立场景，不共享三栏 | FINISHED 阶段 Match 根脚本立即切换到独立的 Result 场景。Result Screen 有自己的三栏布局实例（从同一配置源读取 `panel_ratio`） |
-| **Maze Generator** | 防御性依赖 | Maze Generator 在 SETUP 阶段早期生成迷宫，正常流程下在 Prompt Input 显示前已完成。Prompt Input 监听 `maze_generated` 信号作为 `start_countdown()` 失败时的恢复机制：若 P2 Ready 时迷宫未就绪，等待此信号后自动重试 |
+| **Maze Generator** | 无直接依赖（通过 MSM 中转） | Maze Generator 在 SETUP 阶段早期生成迷宫，正常流程下在 Prompt Input 显示前已完成。**Prompt Input 不直接监听 Maze Generator 的信号**——通过 MSM 的 `maze_ready` 信号作为 `start_countdown()` 失败时的恢复机制：若 P2 Ready 时迷宫未就绪，等待此信号后自动重试。**同时监听 `MatchStateManager.setup_failed` 信号处理迷宫生成失败场景——显示错误提示并回退到 PLAYER_A_INPUT 状态** |
 | **LLM Agent Integration** | Agent 间接依赖 Prompt Input | Prompt Input 写入 `MatchConfig.prompt_a/b`，LLM Agent Integration 在 `initialize()` 时读取这些 prompt 构建 system message。两者通过 MatchConfig 数据传递，无直接引用 |
 | **(无上游依赖)** | — | Prompt Input 仅依赖 Match State Manager（Foundation 层）。不依赖任何 Gameplay 或 AI 系统 |
 
@@ -230,7 +230,8 @@ char_count = prompt_text.length()
 - [ ] P1 的 prompt 正确写入 `MatchConfig.prompt_a`
 - [ ] P2 的 prompt 正确写入 `MatchConfig.prompt_b`
 - [ ] `COMPLETED` 后调用 `start_countdown()`，触发 SETUP → COUNTDOWN 状态转移
-- [ ] 若 `start_countdown()` 返回 false（迷宫未就绪），显示等待提示，`maze_generated` 信号到达后自动重试，不卡死
+- [ ] 若 `start_countdown()` 返回 false（迷宫未就绪），显示等待提示，MSM 的 `maze_ready` 信号到达后自动重试，不卡死
+- [ ] 若收到 `MatchStateManager.setup_failed` 信号（迷宫生成失败），显示错误提示并回退到 `PLAYER_A_INPUT` 状态，允许重新输入
 
 ### 重赛
 - [ ] 重新进入 SETUP 状态时（`reset()` 后），Prompt Input 重置为 `PLAYER_A_INPUT`，清空暂存 prompt
