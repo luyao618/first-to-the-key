@@ -26,7 +26,7 @@ Win Condition / Chest 是判定比赛胜负的终局系统。当任意一方 Age
 **宝箱激活机制**
 
 1. 宝箱位置在 Maze Generator 生成时确定（`CHEST` marker 已放置在 MazeData 中），但初始状态为 **Inactive**
-2. Inactive 的宝箱对所有系统不可见——Fog of War 不暴露、Renderer 不渲染、开启判定跳过
+2. Inactive 的宝箱对玩家不可见——消费方（Match Renderer / LLM Information Format）查询 `is_chest_active()` 自行过滤，Renderer 不渲染、LLM 不报告。开启判定也跳过 Inactive 宝箱。**注意：FoW 不负责此过滤**——FoW 仅管理 cell 三态可见性
 3. 当 Win Condition 收到第一个 `chest_unlocked(agent_id)` 信号时，宝箱变为 **Active**
 4. 宝箱激活后发出 `chest_activated` 信号，通知 Fog of War / Renderer 等系统"宝箱已出现"
 5. 宝箱激活是一次性全局事件——后续收到的 `chest_unlocked` 信号不再重复激活

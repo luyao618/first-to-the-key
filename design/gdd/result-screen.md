@@ -81,7 +81,7 @@ MVP 阶段仅支持 Agent vs Agent 模式的结果展示，不支持回放功能
 ```
 Result._ready():
   1. 从 MatchStateManager 读取：
-     - result (WIN_A / WIN_B / DRAW)
+     - result (PLAYER_A_WIN / PLAYER_B_WIN / DRAW)
      - winner_id (0 / 1 / -1)
      - config.prompt_a, config.prompt_b
      - tick_count
