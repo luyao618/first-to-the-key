@@ -109,3 +109,99 @@ func _make_finalized_maze(MazeDataClass) -> RefCounted:
 	maze.place_marker(1, 2, Enums.MarkerType.CHEST)
 	maze.finalize()
 	return maze
+
+
+func test_tick_increments_in_playing_state() -> void:
+	msm.start_setup({})
+	var MazeDataClass := preload("res://src/core/maze_data.gd")
+	var maze := _make_finalized_maze(MazeDataClass)
+	msm.current_maze = maze
+	msm.start_countdown()
+	msm.start_playing()
+	assert_eq(msm.tick_count, 0)
+	# Simulate tick
+	msm._on_tick_timeout()
+	assert_eq(msm.tick_count, 1)
+	msm._on_tick_timeout()
+	assert_eq(msm.tick_count, 2)
+
+
+func test_tick_signal_emitted() -> void:
+	msm.start_setup({})
+	var MazeDataClass := preload("res://src/core/maze_data.gd")
+	var maze := _make_finalized_maze(MazeDataClass)
+	msm.current_maze = maze
+	msm.start_countdown()
+	msm.start_playing()
+	watch_signals(msm)
+	msm._on_tick_timeout()
+	assert_signal_emitted_with_parameters(msm, "tick", [1])
+
+
+func test_tick_not_emitted_in_setup() -> void:
+	watch_signals(msm)
+	msm._on_tick_timeout()
+	assert_signal_not_emitted(msm, "tick")
+
+
+func test_finish_match_stops_ticks() -> void:
+	msm.start_setup({})
+	var MazeDataClass := preload("res://src/core/maze_data.gd")
+	var maze := _make_finalized_maze(MazeDataClass)
+	msm.current_maze = maze
+	msm.start_countdown()
+	msm.start_playing()
+	msm.finish_match(Enums.MatchResult.PLAYER_B_WIN, 1)
+	watch_signals(msm)
+	msm._on_tick_timeout()
+	assert_signal_not_emitted(msm, "tick")
+
+
+func test_match_finished_signal() -> void:
+	msm.start_setup({})
+	var MazeDataClass := preload("res://src/core/maze_data.gd")
+	var maze := _make_finalized_maze(MazeDataClass)
+	msm.current_maze = maze
+	msm.start_countdown()
+	msm.start_playing()
+	watch_signals(msm)
+	msm.finish_match(Enums.MatchResult.DRAW, -1)
+	assert_signal_emitted_with_parameters(msm, "match_finished", [Enums.MatchResult.DRAW])
+
+
+func test_double_finish_match_second_ignored() -> void:
+	msm.start_setup({})
+	var MazeDataClass := preload("res://src/core/maze_data.gd")
+	var maze := _make_finalized_maze(MazeDataClass)
+	msm.current_maze = maze
+	msm.start_countdown()
+	msm.start_playing()
+	msm.finish_match(Enums.MatchResult.PLAYER_A_WIN, 0)
+	# Second call should be ignored (already FINISHED)
+	msm.finish_match(Enums.MatchResult.PLAYER_B_WIN, 1)
+	assert_eq(msm.result, Enums.MatchResult.PLAYER_A_WIN, "First result should stick")
+	assert_eq(msm.winner_id, 0, "First winner should stick")
+
+
+func test_countdown_auto_triggers_playing() -> void:
+	msm.start_setup({})
+	var MazeDataClass := preload("res://src/core/maze_data.gd")
+	var maze := _make_finalized_maze(MazeDataClass)
+	msm.current_maze = maze
+	msm.start_countdown()
+	assert_eq(msm.current_state, Enums.MatchState.COUNTDOWN)
+	# Simulate countdown finishing
+	msm._on_countdown_finished()
+	assert_eq(msm.current_state, Enums.MatchState.PLAYING)
+
+
+func test_is_playing_query() -> void:
+	assert_false(msm.is_playing())
+	msm.start_setup({})
+	var MazeDataClass := preload("res://src/core/maze_data.gd")
+	var maze := _make_finalized_maze(MazeDataClass)
+	msm.current_maze = maze
+	msm.start_countdown()
+	assert_false(msm.is_playing())
+	msm.start_playing()
+	assert_true(msm.is_playing())
