@@ -16,6 +16,8 @@ enum VisionStrategy { PATH_REACH, LINE_OF_SIGHT }
 
 enum MoveDirection { NORTH, EAST, SOUTH, WEST, NONE }
 
+enum CellVisibility { UNKNOWN, VISIBLE, EXPLORED }
+
 
 ## Direction -> Vector2i offset mapping.
 const DIRECTION_OFFSETS: Dictionary = {
