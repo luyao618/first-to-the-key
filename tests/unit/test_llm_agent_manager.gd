@@ -218,6 +218,147 @@ func test_reset_clears_brains() -> void:
 	assert_eq(mgr._brains.size(), 0)
 
 
+# --- API Response Handling ---
+
+func test_handle_target_response_generates_queue() -> void:
+	var brain := mgr.get_brain(0)
+	var pos := gm.get_position_of(0)
+	var target := _find_reachable_target(pos)
+	if target == Vector2i(-1, -1):
+		pass_test("No reachable target")
+		return
+	# Make target visible/explored
+	fog_node.update_vision(0, pos)
+	var vis := fog_node.get_cell_visibility(0, target.x, target.y)
+	if vis == Enums.CellVisibility.UNKNOWN:
+		# Move closer so target is visible
+		pass_test("Target not visible - skip")
+		return
+
+	brain["pending_response"] = '{"target": [%d, %d]}' % [target.x, target.y]
+	mgr._handle_api_response(brain, brain["pending_response"])
+	assert_gt(brain["path_queue"].size(), 0, "Should generate path queue")
+
+
+func test_handle_direction_response_single_step() -> void:
+	var brain := mgr.get_brain(0)
+	brain["pending_response"] = '{"direction": "EAST"}'
+	mgr._handle_api_response(brain, brain["pending_response"])
+	assert_eq(brain["path_queue"].size(), 1)
+	assert_eq(brain["path_queue"][0], Enums.MoveDirection.EAST)
+
+
+func test_handle_none_response_no_queue_change() -> void:
+	var brain := mgr.get_brain(0)
+	brain["path_queue"] = [Enums.MoveDirection.NORTH] as Array[int]
+	mgr._handle_api_response(brain, "invalid response")
+	assert_eq(brain["path_queue"].size(), 1, "NONE should not clear existing queue")
+
+
+# --- Target Validation ---
+
+func test_validate_target_out_of_bounds() -> void:
+	var brain := mgr.get_brain(0)
+	assert_false(mgr._validate_target(brain, Vector2i(-1, 0)))
+	assert_false(mgr._validate_target(brain, Vector2i(maze.width, 0)))
+	assert_false(mgr._validate_target(brain, Vector2i(0, maze.height)))
+
+
+func test_validate_target_unknown_cell() -> void:
+	var brain := mgr.get_brain(0)
+	# Find a cell that's UNKNOWN for agent 0
+	for y in range(maze.height):
+		for x in range(maze.width):
+			if fog_node.get_cell_visibility(0, x, y) == Enums.CellVisibility.UNKNOWN:
+				assert_false(mgr._validate_target(brain, Vector2i(x, y)),
+					"Unknown cell should be rejected")
+				return
+	pass_test("All cells visible (small maze)")
+
+
+func test_validate_target_current_position() -> void:
+	var brain := mgr.get_brain(0)
+	var pos := gm.get_position_of(0)
+	assert_false(mgr._validate_target(brain, pos), "Current position should be rejected")
+
+
+func test_validate_target_visible_cell_accepted() -> void:
+	var brain := mgr.get_brain(0)
+	var pos := gm.get_position_of(0)
+	var visible := fog_node.get_visible_cells(0)
+	for v in visible:
+		if v != pos:
+			assert_true(mgr._validate_target(brain, v),
+				"Visible cell should be accepted")
+			return
+	pass_test("No visible cell other than current position")
+
+
+# --- Tick Processing ---
+
+func test_first_tick_idle_no_api_key() -> void:
+	# Without API key, first tick should still track idle
+	var brain := mgr.get_brain(0)
+	mgr._active = true
+	mgr._process_brain_tick(brain, 1)
+	assert_eq(brain["total_idle_ticks"], 1)
+
+
+func test_tick_consumes_queue() -> void:
+	var brain := mgr.get_brain(0)
+	brain["last_move_direction"] = Enums.MoveDirection.EAST  # Not first tick
+	var pos := gm.get_position_of(0)
+	# Find a valid direction
+	var valid_dir := Enums.MoveDirection.NONE
+	for dir in [Enums.MoveDirection.EAST, Enums.MoveDirection.SOUTH]:
+		var maze_dir: int
+		match dir:
+			Enums.MoveDirection.EAST: maze_dir = Enums.Direction.EAST
+			Enums.MoveDirection.SOUTH: maze_dir = Enums.Direction.SOUTH
+		if maze.can_move(pos.x, pos.y, maze_dir):
+			valid_dir = dir
+			break
+	if valid_dir == Enums.MoveDirection.NONE:
+		pass_test("No valid direction from spawn")
+		return
+
+	brain["path_queue"] = [valid_dir] as Array[int]
+	mgr._active = true
+	mgr._process_brain_tick(brain, 1)
+	assert_eq(brain["path_queue"].size(), 0, "Queue should be consumed")
+
+
+# --- Statistics ---
+
+func test_statistics_reset() -> void:
+	var brain := mgr.get_brain(0)
+	brain["total_api_calls"] = 5
+	brain["total_tokens_used"] = 1000
+	brain["total_idle_ticks"] = 10
+	mgr.reset()
+	mgr.initialize()
+	brain = mgr.get_brain(0)
+	assert_eq(brain["total_api_calls"], 0)
+	assert_eq(brain["total_tokens_used"], 0)
+	assert_eq(brain["total_idle_ticks"], 0)
+
+
+func test_get_api_call_count() -> void:
+	var brain := mgr.get_brain(0)
+	brain["total_api_calls"] = 42
+	assert_eq(mgr.get_api_call_count(0), 42)
+
+
+func test_get_idle_tick_count() -> void:
+	var brain := mgr.get_brain(0)
+	brain["total_idle_ticks"] = 7
+	assert_eq(mgr.get_idle_tick_count(0), 7)
+
+
+func test_get_api_call_count_invalid_id() -> void:
+	assert_eq(mgr.get_api_call_count(99), 0)
+
+
 # --- Helpers ---
 
 func _dir_to_move_dir(dir: int) -> int:
