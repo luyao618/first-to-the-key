@@ -1,6 +1,6 @@
 # Presentation Layer Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Implement the four Presentation-layer systems (Match Renderer, Prompt Input, Match HUD, Result Screen) that depend on Foundation + Core + Feature layers and provide the complete visual game experience.
 
@@ -50,7 +50,7 @@ tests/
 - Modify: `assets/data/game_config.json`
 - Modify: `src/shared/enums.gd`
 
-- [ ] **Step 1: Create UI config file**
+- [x] **Step 1: Create UI config file**
 
 Create `assets/data/ui_config.json`:
 
@@ -96,7 +96,7 @@ Create `assets/data/ui_config.json`:
 }
 ```
 
-- [ ] **Step 2: Add Presentation enums to shared enums**
+- [x] **Step 2: Add Presentation enums to shared enums**
 
 Append to `src/shared/enums.gd` (after existing enums):
 
@@ -111,7 +111,7 @@ const KEY_SEQUENCE: Array[int] = [MarkerType.KEY_BRASS, MarkerType.KEY_JADE, Mar
 
 Note: `AgentKeyState` and `KEY_SEQUENCE` may already be added by the Feature Layer plan (Key Collection). If so, skip duplicates. The `RenderMode` enum is new to this layer.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add assets/data/ui_config.json src/shared/enums.gd
@@ -126,7 +126,7 @@ git commit -m "feat: add UI config and RenderMode enum for Presentation Layer"
 - Modify: `scenes/match/Match.tscn`
 - Modify: `scenes/match/match.gd`
 
-- [ ] **Step 1: Write Match scene with 3-column layout**
+- [x] **Step 1: Write Match scene with 3-column layout**
 
 Update `scenes/match/match.gd`:
 
@@ -162,7 +162,7 @@ func _apply_layout() -> void:
 		center_panel.custom_minimum_size.x = vp_size.x * (1.0 - 2.0 * _panel_ratio)
 ```
 
-- [ ] **Step 2: Update Match.tscn to use Control root with HBoxContainer**
+- [x] **Step 2: Update Match.tscn to use Control root with HBoxContainer**
 
 Recreate `scenes/match/Match.tscn`:
 
@@ -203,7 +203,7 @@ size_flags_horizontal = 3
 TSCN
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add scenes/match/Match.tscn scenes/match/match.gd
@@ -218,7 +218,7 @@ git commit -m "feat: Match scene 3-column layout with configurable panel ratio"
 - Create: `src/ui/match_renderer.gd`
 - Create: `tests/unit/test_match_renderer.gd`
 
-- [ ] **Step 1: Write failing tests for MatchRenderer initialization**
+- [x] **Step 1: Write failing tests for MatchRenderer initialization**
 
 Create `tests/unit/test_match_renderer.gd`:
 
@@ -324,13 +324,13 @@ func test_cleanup_removes_all() -> void:
 	assert_null(renderer._chest_sprite)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_match_renderer.gd -gexit`
 
 Expected: FAIL - cannot preload `match_renderer.gd`
 
-- [ ] **Step 3: Implement MatchRenderer**
+- [x] **Step 3: Implement MatchRenderer**
 
 Create `src/ui/match_renderer.gd`:
 
@@ -629,13 +629,13 @@ class _MazeGridDrawer extends Node2D:
 					draw_line(Vector2(ox, oy), Vector2(ox, oy + cell_size), wall_color, wall_width)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_match_renderer.gd -gexit`
 
 Expected: All 13 tests PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/ui/match_renderer.gd tests/unit/test_match_renderer.gd
@@ -650,7 +650,7 @@ git commit -m "feat: MatchRenderer with maze grid, marker sprites, agent sprites
 - Create: `src/ui/prompt_input.gd`
 - Create: `tests/unit/test_prompt_input.gd`
 
-- [ ] **Step 1: Write failing tests for PromptInput**
+- [x] **Step 1: Write failing tests for PromptInput**
 
 Create `tests/unit/test_prompt_input.gd`:
 
@@ -722,13 +722,13 @@ func test_completed_signal_emitted() -> void:
 	assert_signal_emitted(pi, "prompts_submitted")
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_prompt_input.gd -gexit`
 
 Expected: FAIL - cannot preload `prompt_input.gd`
 
-- [ ] **Step 3: Implement PromptInput**
+- [x] **Step 3: Implement PromptInput**
 
 Create `src/ui/prompt_input.gd`:
 
@@ -884,13 +884,13 @@ func _clear_panels(left: Control, right: Control) -> void:
 		child.queue_free()
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_prompt_input.gd -gexit`
 
 Expected: All 9 tests PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/ui/prompt_input.gd tests/unit/test_prompt_input.gd
@@ -905,7 +905,7 @@ git commit -m "feat: PromptInput with sequential P1/P2 prompt collection, state 
 - Create: `src/ui/match_hud.gd`
 - Create: `tests/unit/test_match_hud.gd`
 
-- [ ] **Step 1: Write failing tests for MatchHUD**
+- [x] **Step 1: Write failing tests for MatchHUD**
 
 Create `tests/unit/test_match_hud.gd`:
 
@@ -1025,13 +1025,13 @@ func test_initialize_resets_all() -> void:
 	assert_false(hud._is_playing)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_match_hud.gd -gexit`
 
 Expected: FAIL - cannot preload `match_hud.gd`
 
-- [ ] **Step 3: Implement MatchHUD**
+- [x] **Step 3: Implement MatchHUD**
 
 Create `src/ui/match_hud.gd`:
 
@@ -1320,13 +1320,13 @@ func _build_toast_overlay() -> void:
 	_toast_bg.add_child(_toast_label)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_match_hud.gd -gexit`
 
 Expected: All 15 tests PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/ui/match_hud.gd tests/unit/test_match_hud.gd
@@ -1343,7 +1343,7 @@ git commit -m "feat: MatchHUD with key progress slots, timer, toast notification
 - Modify: `scenes/result/Result.tscn`
 - Modify: `scenes/result/result.gd`
 
-- [ ] **Step 1: Write failing tests for ResultScreen**
+- [x] **Step 1: Write failing tests for ResultScreen**
 
 Create `tests/unit/test_result_screen.gd`:
 
@@ -1468,13 +1468,13 @@ func test_get_prompt_display_empty() -> void:
 	assert_eq(rs.get_prompt_display(""), "(empty)")
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_result_screen.gd -gexit`
 
 Expected: FAIL - cannot preload `result_screen.gd`
 
-- [ ] **Step 3: Implement ResultScreen**
+- [x] **Step 3: Implement ResultScreen**
 
 Create `src/ui/result_screen.gd`:
 
@@ -1812,7 +1812,7 @@ func _on_quit_pressed() -> void:
 	get_tree().quit()
 ```
 
-- [ ] **Step 4: Update Result scene script**
+- [x] **Step 4: Update Result scene script**
 
 Modify `scenes/result/result.gd`:
 
@@ -1833,13 +1833,13 @@ func _ready() -> void:
 	_result_screen.populate_from_autoloads()
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_result_screen.gd -gexit`
 
 Expected: All 22 tests PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/ui/result_screen.gd tests/unit/test_result_screen.gd scenes/result/result.gd
@@ -1853,7 +1853,7 @@ git commit -m "feat: ResultScreen with result title, agent stats, prompt display
 **Files:**
 - Modify: `scenes/match/match.gd`
 
-- [ ] **Step 1: Implement full Match scene orchestration**
+- [x] **Step 1: Implement full Match scene orchestration**
 
 Update `scenes/match/match.gd` with complete signal wiring and lifecycle management:
 
@@ -2185,7 +2185,7 @@ func _on_setup_failed(reason: String) -> void:
 	_setup_prompt_input()
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add scenes/match/match.gd
@@ -2198,19 +2198,19 @@ git commit -m "feat: Match scene orchestration with full signal wiring and lifec
 
 **Files:** None (verification only)
 
-- [ ] **Step 1: Run all Presentation Layer tests**
+- [x] **Step 1: Run all Presentation Layer tests**
 
 Run: `godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_match_renderer.gd,res://tests/unit/test_prompt_input.gd,res://tests/unit/test_match_hud.gd,res://tests/unit/test_result_screen.gd -gexit`
 
 Expected: All tests PASS (~59 tests across 4 test files)
 
-- [ ] **Step 2: Run all project tests**
+- [x] **Step 2: Run all project tests**
 
 Run: `godot --headless --script addons/gut/gut_cmdln.gd -gdir=res://tests/unit/ -gexit`
 
 Expected: All tests PASS (~190+ tests across Foundation + Core + Feature + Presentation)
 
-- [ ] **Step 3: Fix any integration issues**
+- [x] **Step 3: Fix any integration issues**
 
 If any failures, fix and commit:
 ```bash
@@ -2224,7 +2224,7 @@ git commit -m "fix: resolve Presentation Layer integration issues"
 
 After completing all tasks, verify:
 
-- [ ] **MatchRenderer** passes all acceptance criteria from `design/gdd/match-renderer.md`:
+- [x] **MatchRenderer** passes all acceptance criteria from `design/gdd/match-renderer.md`:
   - Maze grid renders with walls and floors using `_draw()`
   - Agent sprites at spawn positions with correct colors (A=blue, B=red)
   - Brass key visible initially; Jade, Crystal, Chest hidden
@@ -2236,7 +2236,7 @@ After completing all tasks, verify:
   - `on_key_collected()` dims or hides key sprite
   - `cleanup()` removes all child nodes and clears references
   - All config from `ui_config.json` (cell_size, colors, anim durations)
-- [ ] **PromptInput** passes all acceptance criteria from `design/gdd/prompt-input.md`:
+- [x] **PromptInput** passes all acceptance criteria from `design/gdd/prompt-input.md`:
   - Initial state: PLAYER_A_INPUT
   - `submit_prompt_a()` advances to PLAYER_B_INPUT and stores prompt
   - `submit_prompt_b()` advances to COMPLETED and stores prompt
@@ -2246,7 +2246,7 @@ After completing all tasks, verify:
   - `reset_input()` clears all state back to PLAYER_A_INPUT
   - UI builds dynamically with TextEdit + Ready button
   - Config from `ui_config.json` (placeholder_text, min_lines, show_char_count)
-- [ ] **MatchHUD** passes all acceptance criteria from `design/gdd/match-hud.md`:
+- [x] **MatchHUD** passes all acceptance criteria from `design/gdd/match-hud.md`:
   - 6 key slots (3 per agent) start gray/locked
   - `on_key_collected()` updates correct slot for correct agent
   - Agent independence: A's pickup doesn't affect B's slots
@@ -2256,7 +2256,7 @@ After completing all tasks, verify:
   - `set_playing(false)` prevents key collection updates
   - `_initialize_state()` resets all slots, toast, playing state
   - All config from `ui_config.json` (toast_duration, pulse, font sizes)
-- [ ] **ResultScreen** passes all acceptance criteria from `design/gdd/result-screen.md`:
+- [x] **ResultScreen** passes all acceptance criteria from `design/gdd/result-screen.md`:
   - `get_result_title()`: correct titles for WIN_A, WIN_B, DRAW
   - `get_result_color()`: correct colors (blue, red, gray)
   - `get_agent_status()`: "Winner" / "Defeated" / "Draw" per agent
@@ -2269,7 +2269,7 @@ After completing all tasks, verify:
   - Quit button calls `get_tree().quit()`
   - Reads from Autoloads (MSM, LLMAgentManager, KeyCollection) with null checks
   - All config from `ui_config.json` (font sizes, colors, panel ratio)
-- [ ] **Match Scene Orchestration** handles full lifecycle:
+- [x] **Match Scene Orchestration** handles full lifecycle:
   - SETUP: PromptInput displayed, prompts collected
   - COUNTDOWN: Maze generated, all systems initialized, signals wired
   - PLAYING: HUD displayed, systems active, tick processing works
@@ -2279,6 +2279,6 @@ After completing all tasks, verify:
   - Signal chain: GridMovement → Renderer (animations)
   - Signal chain: KeyCollection → HUD (slot updates)
   - Signal chain: WinCondition → HUD (toast) + Renderer (chest)
-- [ ] All config values from JSON, no hardcoded gameplay values
-- [ ] ~190+ tests all passing across Foundation + Core + Feature + Presentation
+- [x] All config values from JSON, no hardcoded gameplay values
+- [x] ~190+ tests all passing across Foundation + Core + Feature + Presentation
 
