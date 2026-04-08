@@ -44,7 +44,7 @@ tests/
 - Modify: `assets/data/game_config.json`
 - Modify: `project.godot`
 
-- [ ] **Step 1: Add Feature Layer enums to shared enums**
+- [x] **Step 1: Add Feature Layer enums to shared enums**
 
 Append the following to `src/shared/enums.gd` (after `CellVisibility` enum added by Core Layer):
 
@@ -75,7 +75,7 @@ const OPPOSITE_MOVE_DIRECTION: Dictionary = {
 }
 ```
 
-- [ ] **Step 2: Add LLM format config to game_config.json**
+- [x] **Step 2: Add LLM format config to game_config.json**
 
 The `llm_format` section already exists in `game_config.json` from Foundation Layer. Verify it contains:
 
@@ -92,7 +92,7 @@ The `llm_format` section already exists in `game_config.json` from Foundation La
 
 If missing, add it.
 
-- [ ] **Step 3: Register KeyCollection and LLMAgentManager Autoloads in project.godot**
+- [x] **Step 3: Register KeyCollection and LLMAgentManager Autoloads in project.godot**
 
 Add to the `[autoload]` section of `project.godot`:
 
@@ -103,13 +103,13 @@ LLMAgentManager="*res://src/ai/llm_agent_manager.gd"
 
 Note: These files don't exist yet — they will be created in later tasks. Godot will show warnings but won't crash. Alternatively, defer this step until the files exist.
 
-- [ ] **Step 4: Create directory structure**
+- [x] **Step 4: Create directory structure**
 
 ```bash
 mkdir -p src/gameplay src/ai
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/shared/enums.gd assets/data/game_config.json project.godot
@@ -124,7 +124,7 @@ git commit -m "feat: add Feature Layer enums (GlobalKeyPhase, AgentKeyState, Che
 - Create: `src/gameplay/key_collection.gd`
 - Create: `tests/unit/test_key_collection.gd`
 
-- [ ] **Step 1: Write failing tests for KeyCollection initialization and pickup**
+- [x] **Step 1: Write failing tests for KeyCollection initialization and pickup**
 
 Create `tests/unit/test_key_collection.gd`:
 
@@ -236,13 +236,13 @@ func test_activation_is_cumulative() -> void:
 	assert_true(kc.is_key_active(Enums.MarkerType.KEY_JADE))
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_key_collection.gd -gexit`
 
 Expected: FAIL - cannot preload `key_collection.gd`
 
-- [ ] **Step 3: Implement KeyCollection**
+- [x] **Step 3: Implement KeyCollection**
 
 Create `src/gameplay/key_collection.gd`:
 
@@ -412,13 +412,13 @@ func _try_advance_global_phase(picked_key: int) -> void:
 				_global_phase = Enums.GlobalKeyPhase.ALL_COLLECTED
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_key_collection.gd -gexit`
 
 Expected: All 10 tests PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/gameplay/key_collection.gd tests/unit/test_key_collection.gd
@@ -432,7 +432,7 @@ git commit -m "feat: KeyCollection with global activation phases and per-agent p
 **Files:**
 - Modify: `tests/unit/test_key_collection.gd`
 
-- [ ] **Step 1: Write tests for full 3-key pipeline, lifecycle, and edge cases**
+- [x] **Step 1: Write tests for full 3-key pipeline, lifecycle, and edge cases**
 
 Append to `tests/unit/test_key_collection.gd`:
 
@@ -584,13 +584,13 @@ func test_missing_key_marker_no_crash() -> void:
 	assert_eq(kc2._key_positions.get(Enums.MarkerType.KEY_JADE, Vector2i(-1, -1)), Vector2i(-1, -1))
 ```
 
-- [ ] **Step 2: Run tests to verify they pass**
+- [x] **Step 2: Run tests to verify they pass**
 
 Run: `godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_key_collection.gd -gexit`
 
 Expected: All 22 tests PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/unit/test_key_collection.gd
@@ -605,7 +605,7 @@ git commit -m "test: KeyCollection full pipeline, lifecycle, checkpoint semantic
 - Create: `src/gameplay/win_condition.gd`
 - Create: `tests/unit/test_win_condition.gd`
 
-- [ ] **Step 1: Write failing tests for WinConditionManager**
+- [x] **Step 1: Write failing tests for WinConditionManager**
 
 Create `tests/unit/test_win_condition.gd`:
 
@@ -754,13 +754,13 @@ func test_initialize_resets_state() -> void:
 	assert_false(wc.is_agent_eligible(0))
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_win_condition.gd -gexit`
 
 Expected: FAIL - cannot preload `win_condition.gd`
 
-- [ ] **Step 3: Implement WinConditionManager**
+- [x] **Step 3: Implement WinConditionManager**
 
 Create `src/gameplay/win_condition.gd`:
 
@@ -880,13 +880,13 @@ func resolve_pending() -> Dictionary:
 	return result
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_win_condition.gd -gexit`
 
 Expected: All 17 tests PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/gameplay/win_condition.gd tests/unit/test_win_condition.gd
@@ -901,7 +901,7 @@ git commit -m "feat: WinConditionManager with chest activation, eligibility, def
 - Create: `src/ai/llm_info_format.gd`
 - Create: `tests/unit/test_llm_info_format.gd`
 
-- [ ] **Step 1: Write failing tests for response parsing**
+- [x] **Step 1: Write failing tests for response parsing**
 
 Create `tests/unit/test_llm_info_format.gd`:
 
@@ -1034,13 +1034,13 @@ func test_parse_invalid_target_falls_back_to_direction() -> void:
 	assert_eq(result["dir"], Enums.MoveDirection.SOUTH)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_llm_info_format.gd -gexit`
 
 Expected: FAIL - cannot preload `llm_info_format.gd`
 
-- [ ] **Step 3: Implement LLMInformationFormat with response parsing**
+- [x] **Step 3: Implement LLMInformationFormat with response parsing**
 
 Create `src/ai/llm_info_format.gd`:
 
@@ -1330,13 +1330,13 @@ func get_token_estimate(text: String) -> int:
 	return text.length() / 4
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_llm_info_format.gd -gexit`
 
 Expected: All 21 tests PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/ai/llm_info_format.gd tests/unit/test_llm_info_format.gd
@@ -1350,7 +1350,7 @@ git commit -m "feat: LLMInformationFormat with response parsing and prompt build
 **Files:**
 - Modify: `tests/unit/test_llm_info_format.gd`
 
-- [ ] **Step 1: Write tests for prompt building**
+- [x] **Step 1: Write tests for prompt building**
 
 Append to `tests/unit/test_llm_info_format.gd`:
 
@@ -1498,13 +1498,13 @@ func assert_does_not_have(text: String, substring: String) -> void:
 		"Expected text to NOT contain '%s'" % substring)
 ```
 
-- [ ] **Step 2: Run tests to verify they pass**
+- [x] **Step 2: Run tests to verify they pass**
 
 Run: `godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_llm_info_format.gd -gexit`
 
 Expected: All 35 tests PASS (21 parsing + 14 building)
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/unit/test_llm_info_format.gd
@@ -1519,7 +1519,7 @@ git commit -m "test: LLMInformationFormat prompt building, FoW compliance, objec
 - Create: `src/ai/llm_agent_manager.gd`
 - Create: `tests/unit/test_llm_agent_manager.gd`
 
-- [ ] **Step 1: Write failing tests for path queue and decision point logic**
+- [x] **Step 1: Write failing tests for path queue and decision point logic**
 
 Create `tests/unit/test_llm_agent_manager.gd`:
 
@@ -1778,13 +1778,13 @@ func _find_distant_target(from: Vector2i, min_dist: int) -> Vector2i:
 	return Vector2i(-1, -1)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_llm_agent_manager.gd -gexit`
 
 Expected: FAIL - cannot preload `llm_agent_manager.gd`
 
-- [ ] **Step 3: Implement LLMAgentManager core (no HTTP yet)**
+- [x] **Step 3: Implement LLMAgentManager core (no HTTP yet)**
 
 Create `src/ai/llm_agent_manager.gd`:
 
@@ -2231,13 +2231,13 @@ func _cancel_request(brain: Dictionary) -> void:
 	brain["pending_response"] = ""
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_llm_agent_manager.gd -gexit`
 
 Expected: All 13 tests PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/ai/llm_agent_manager.gd tests/unit/test_llm_agent_manager.gd
@@ -2251,7 +2251,7 @@ git commit -m "feat: LLMAgentManager with path queue, auto-advance, decision poi
 **Files:**
 - Modify: `tests/unit/test_llm_agent_manager.gd`
 
-- [ ] **Step 1: Write tests for API response handling and target validation**
+- [x] **Step 1: Write tests for API response handling and target validation**
 
 Append to `tests/unit/test_llm_agent_manager.gd`:
 
@@ -2397,13 +2397,13 @@ func test_get_api_call_count_invalid_id() -> void:
 	assert_eq(mgr.get_api_call_count(99), 0)
 ```
 
-- [ ] **Step 2: Run tests to verify they pass**
+- [x] **Step 2: Run tests to verify they pass**
 
 Run: `godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_llm_agent_manager.gd -gexit`
 
 Expected: All 26 tests PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/unit/test_llm_agent_manager.gd
@@ -2417,7 +2417,7 @@ git commit -m "test: LLMAgentManager API response handling, target validation, t
 **Files:**
 - Create: `tests/unit/test_feature_integration.gd`
 
-- [ ] **Step 1: Write integration tests for the full Feature Layer pipeline**
+- [x] **Step 1: Write integration tests for the full Feature Layer pipeline**
 
 Create `tests/unit/test_feature_integration.gd`:
 
@@ -2563,13 +2563,13 @@ func test_reinitialize_full_pipeline() -> void:
 	assert_false(wc.is_agent_eligible(0))
 ```
 
-- [ ] **Step 2: Run integration tests**
+- [x] **Step 2: Run integration tests**
 
 Run: `godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_feature_integration.gd -gexit`
 
 Expected: All 5 tests PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/unit/test_feature_integration.gd
@@ -2582,13 +2582,13 @@ git commit -m "test: Feature Layer integration - KeyCollection + WinCondition si
 
 **Files:** None (verification only)
 
-- [ ] **Step 1: Run all tests**
+- [x] **Step 1: Run all tests**
 
 Run: `godot --headless --script addons/gut/gut_cmdln.gd -gdir=res://tests/unit/ -gexit`
 
 Expected: All tests PASS (~130+ tests across Foundation + Core + Feature)
 
-- [ ] **Step 2: Fix any integration issues**
+- [x] **Step 2: Fix any integration issues**
 
 If any failures, fix and commit:
 ```bash
@@ -2602,8 +2602,8 @@ git commit -m "fix: resolve Feature Layer integration issues"
 
 After completing all tasks, verify:
 
-- [ ] **Enums** updated with GlobalKeyPhase, AgentKeyState, ChestState, AgentEligibility, RequestState, KEY_SEQUENCE, OPPOSITE_MOVE_DIRECTION
-- [ ] **KeyCollection** passes all acceptance criteria from `design/gdd/key-collection.md`:
+- [x] **Enums** updated with GlobalKeyPhase, AgentKeyState, ChestState, AgentEligibility, RequestState, KEY_SEQUENCE, OPPOSITE_MOVE_DIRECTION
+- [x] **KeyCollection** passes all acceptance criteria from `design/gdd/key-collection.md`:
   - Initial state: BRASS_ACTIVE, all agents NEED_BRASS
   - Brass active initially; Jade and Crystal inactive
   - Pickup advances agent progress (NEED_BRASS → NEED_JADE → NEED_CRYSTAL → KEYS_COMPLETE)
@@ -2616,7 +2616,7 @@ After completing all tasks, verify:
   - chest_unlocked emitted per agent when KEYS_COMPLETE
   - initialize() resets all state for Rematch
   - Missing key marker doesn't crash
-- [ ] **WinConditionManager** passes all acceptance criteria from `design/gdd/win-condition.md`:
+- [x] **WinConditionManager** passes all acceptance criteria from `design/gdd/win-condition.md`:
   - Initial: chest INACTIVE, all agents INELIGIBLE
   - chest_unlocked activates chest and marks agent eligible
   - Second chest_unlocked doesn't double-activate
@@ -2627,7 +2627,7 @@ After completing all tasks, verify:
   - pending_openers cleared after resolve
   - Not active = ignores mover_moved
   - reset() and initialize() clear all state
-- [ ] **LLMInformationFormat** passes all acceptance criteria from `design/gdd/llm-information-format.md`:
+- [x] **LLMInformationFormat** passes all acceptance criteria from `design/gdd/llm-information-format.md`:
   - Response parsing: target, direction, priority, aliases, empty, invalid
   - System message includes rules, coordinate system, format, player prompt
   - State message includes position, open directions, visible cells, visited, objective
@@ -2635,7 +2635,7 @@ After completing all tasks, verify:
   - Explored cells sorted by Manhattan distance, truncated at max_explored_count
   - Visited cells reversed (most recent first), truncated at max_visited_count
   - Config from JSON (include_ascii_map, include_explored, max counts)
-- [ ] **LLMAgentManager** passes all acceptance criteria from `design/gdd/llm-agent-integration.md`:
+- [x] **LLMAgentManager** passes all acceptance criteria from `design/gdd/llm-agent-integration.md`:
   - Decision point detection: intersection, dead end, auto-advance straight
   - Path queue: generate from A*, consume front, truncate at max
   - Auto-advance on straight corridors
@@ -2644,5 +2644,5 @@ After completing all tasks, verify:
   - API response handling: target→queue, direction→single step, none→no change
   - Statistics tracking: api_calls, tokens_used, idle_ticks
   - Reset clears all state
-- [ ] All config values from JSON, no hardcoded gameplay values
-- [ ] ~130+ tests all passing across Foundation + Core + Feature
+- [x] All config values from JSON, no hardcoded gameplay values
+- [x] ~130+ tests all passing across Foundation + Core + Feature
