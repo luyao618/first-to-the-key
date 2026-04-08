@@ -163,3 +163,66 @@ func remove_marker(x: int, y: int, marker_type: int) -> void:
 
 	if _marker_positions.has(marker_type) and _marker_positions[marker_type] == Vector2i(x, y):
 		_marker_positions.erase(marker_type)
+
+
+## Validate maze integrity:
+## - All 6 required markers (SPAWN_A/B, KEY_BRASS/JADE/CRYSTAL, CHEST) exist
+## - All 6 marker positions are unique (no two markers on same cell)
+## - Maze is fully connected (BFS from SPAWN_A reaches all cells)
+func is_valid() -> bool:
+	var required_markers := [
+		Enums.MarkerType.SPAWN_A,
+		Enums.MarkerType.SPAWN_B,
+		Enums.MarkerType.KEY_BRASS,
+		Enums.MarkerType.KEY_JADE,
+		Enums.MarkerType.KEY_CRYSTAL,
+		Enums.MarkerType.CHEST,
+	]
+
+	# Check all required markers exist
+	for marker in required_markers:
+		if not _marker_positions.has(marker):
+			push_error("MazeData: Missing required marker: %d" % marker)
+			return false
+
+	# Check all marker positions are unique
+	var positions: Array[Vector2i] = []
+	for marker in required_markers:
+		var pos: Vector2i = _marker_positions[marker]
+		if pos in positions:
+			push_error("MazeData: Duplicate marker position at (%d, %d)" % [pos.x, pos.y])
+			return false
+		positions.append(pos)
+
+	# Check full connectivity via BFS from SPAWN_A
+	var start: Vector2i = _marker_positions[Enums.MarkerType.SPAWN_A]
+	var visited: Dictionary = {}
+	var queue: Array[Vector2i] = [start]
+	visited[start] = true
+
+	while queue.size() > 0:
+		var current: Vector2i = queue.pop_front()
+		for neighbor in get_neighbors(current.x, current.y):
+			if not visited.has(neighbor):
+				visited[neighbor] = true
+				queue.append(neighbor)
+
+	if visited.size() != width * height:
+		push_error("MazeData: Unreachable cells detected (%d reachable of %d total)" % [visited.size(), width * height])
+		return false
+
+	return true
+
+
+## Validate and lock the maze for reading. Returns true if valid.
+func finalize() -> bool:
+	if not is_valid():
+		return false
+	_finalized = true
+	return true
+
+
+## Reset to uninitialized state: all walls up, all markers cleared, writes unlocked.
+func reset() -> void:
+	_finalized = false
+	_init_cells()

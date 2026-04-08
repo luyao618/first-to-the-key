@@ -135,3 +135,125 @@ func test_multiple_markers_on_same_cell() -> void:
 func test_unplaced_marker_returns_negative_one() -> void:
 	var maze := MazeData.new(5, 5)
 	assert_eq(maze.get_marker_position(Enums.MarkerType.CHEST), Vector2i(-1, -1))
+
+
+## Helper: create a minimal valid 3x3 maze (all connected, all markers placed).
+func _make_valid_maze() -> MazeData:
+	var maze := MazeData.new(3, 3)
+	# Open a path: (0,0)-(1,0)-(2,0)-(2,1)-(2,2)-(1,2)-(0,2)-(0,1)-(1,1)
+	maze.set_wall(0, 0, Enums.Direction.EAST, false)
+	maze.set_wall(1, 0, Enums.Direction.EAST, false)
+	maze.set_wall(2, 0, Enums.Direction.SOUTH, false)
+	maze.set_wall(2, 1, Enums.Direction.SOUTH, false)
+	maze.set_wall(2, 2, Enums.Direction.WEST, false)
+	maze.set_wall(1, 2, Enums.Direction.WEST, false)
+	maze.set_wall(0, 2, Enums.Direction.NORTH, false)
+	maze.set_wall(1, 1, Enums.Direction.SOUTH, false)
+	# Place all 6 markers on unique cells
+	maze.place_marker(0, 0, Enums.MarkerType.SPAWN_A)
+	maze.place_marker(2, 2, Enums.MarkerType.SPAWN_B)
+	maze.place_marker(1, 0, Enums.MarkerType.KEY_BRASS)
+	maze.place_marker(2, 0, Enums.MarkerType.KEY_JADE)
+	maze.place_marker(2, 1, Enums.MarkerType.KEY_CRYSTAL)
+	maze.place_marker(1, 2, Enums.MarkerType.CHEST)
+	return maze
+
+
+func test_is_valid_with_complete_maze() -> void:
+	var maze := _make_valid_maze()
+	assert_true(maze.is_valid())
+
+
+func test_is_valid_fails_missing_marker() -> void:
+	var maze := _make_valid_maze()
+	maze.remove_marker(1, 2, Enums.MarkerType.CHEST)
+	assert_false(maze.is_valid())
+
+
+func test_is_valid_fails_duplicate_marker_positions() -> void:
+	var maze := MazeData.new(3, 3)
+	# Open path
+	maze.set_wall(0, 0, Enums.Direction.EAST, false)
+	maze.set_wall(1, 0, Enums.Direction.EAST, false)
+	maze.set_wall(2, 0, Enums.Direction.SOUTH, false)
+	maze.set_wall(2, 1, Enums.Direction.SOUTH, false)
+	maze.set_wall(2, 2, Enums.Direction.WEST, false)
+	maze.set_wall(1, 2, Enums.Direction.WEST, false)
+	maze.set_wall(0, 2, Enums.Direction.NORTH, false)
+	maze.set_wall(1, 1, Enums.Direction.SOUTH, false)
+	# Place two markers on same cell
+	maze.place_marker(0, 0, Enums.MarkerType.SPAWN_A)
+	maze.place_marker(0, 0, Enums.MarkerType.KEY_BRASS)  # Same cell as SPAWN_A!
+	maze.place_marker(2, 2, Enums.MarkerType.SPAWN_B)
+	maze.place_marker(1, 0, Enums.MarkerType.KEY_JADE)
+	maze.place_marker(2, 0, Enums.MarkerType.KEY_CRYSTAL)
+	maze.place_marker(2, 1, Enums.MarkerType.CHEST)
+	assert_false(maze.is_valid())
+
+
+func test_is_valid_fails_disconnected() -> void:
+	var maze := MazeData.new(3, 3)
+	# No walls removed - all cells isolated
+	maze.place_marker(0, 0, Enums.MarkerType.SPAWN_A)
+	maze.place_marker(2, 2, Enums.MarkerType.SPAWN_B)
+	maze.place_marker(1, 0, Enums.MarkerType.KEY_BRASS)
+	maze.place_marker(2, 0, Enums.MarkerType.KEY_JADE)
+	maze.place_marker(2, 1, Enums.MarkerType.KEY_CRYSTAL)
+	maze.place_marker(1, 2, Enums.MarkerType.CHEST)
+	assert_false(maze.is_valid())
+
+
+func test_finalize_locks_writes() -> void:
+	var maze := _make_valid_maze()
+	assert_true(maze.finalize())
+	# Writes should be rejected after finalize
+	maze.set_wall(1, 1, Enums.Direction.NORTH, false)
+	assert_true(maze.has_wall(1, 1, Enums.Direction.NORTH), "set_wall should be rejected after finalize")
+	maze.place_marker(1, 1, Enums.MarkerType.CHEST)
+	assert_eq(maze.get_marker_position(Enums.MarkerType.CHEST), Vector2i(1, 2), "place_marker should be rejected after finalize")
+
+
+func test_finalize_fails_on_invalid_maze() -> void:
+	var maze := MazeData.new(3, 3)  # No markers
+	assert_false(maze.finalize())
+
+
+func test_reset_restores_initial_state() -> void:
+	var maze := _make_valid_maze()
+	maze.finalize()
+	maze.reset()
+	# All walls should be back
+	assert_true(maze.has_wall(0, 0, Enums.Direction.EAST))
+	# Markers cleared
+	assert_eq(maze.get_marker_position(Enums.MarkerType.SPAWN_A), Vector2i(-1, -1))
+	# Write should work again
+	maze.set_wall(0, 0, Enums.Direction.EAST, false)
+	assert_false(maze.has_wall(0, 0, Enums.Direction.EAST))
+
+
+func test_reset_is_idempotent() -> void:
+	var maze := MazeData.new(3, 3)
+	maze.reset()  # Should not error on Uninitialized state
+	assert_true(maze.has_wall(0, 0, Enums.Direction.NORTH))
+
+
+func test_reset_then_finalize_works() -> void:
+	var maze := _make_valid_maze()
+	maze.finalize()
+	maze.reset()
+	# Rebuild the same valid maze
+	maze.set_wall(0, 0, Enums.Direction.EAST, false)
+	maze.set_wall(1, 0, Enums.Direction.EAST, false)
+	maze.set_wall(2, 0, Enums.Direction.SOUTH, false)
+	maze.set_wall(2, 1, Enums.Direction.SOUTH, false)
+	maze.set_wall(2, 2, Enums.Direction.WEST, false)
+	maze.set_wall(1, 2, Enums.Direction.WEST, false)
+	maze.set_wall(0, 2, Enums.Direction.NORTH, false)
+	maze.set_wall(1, 1, Enums.Direction.SOUTH, false)
+	maze.place_marker(0, 0, Enums.MarkerType.SPAWN_A)
+	maze.place_marker(2, 2, Enums.MarkerType.SPAWN_B)
+	maze.place_marker(1, 0, Enums.MarkerType.KEY_BRASS)
+	maze.place_marker(2, 0, Enums.MarkerType.KEY_JADE)
+	maze.place_marker(2, 1, Enums.MarkerType.KEY_CRYSTAL)
+	maze.place_marker(1, 2, Enums.MarkerType.CHEST)
+	assert_true(maze.finalize())
