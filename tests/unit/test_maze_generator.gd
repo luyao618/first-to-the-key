@@ -103,3 +103,126 @@ func test_markers_not_on_spawn_cells() -> void:
 		var pos := maze.get_marker_position(marker)
 		assert_ne(pos, spawn_a, "Marker %d should not be on SPAWN_A" % marker)
 		assert_ne(pos, spawn_b, "Marker %d should not be on SPAWN_B" % marker)
+
+
+func test_fairness_validation_passes() -> void:
+	var gen := _make_generator()
+	watch_signals(gen)
+	gen.generate(15, 15)
+	var maze: RefCounted = get_signal_parameters(gen, "maze_generated", 0)[0]
+	# Verify fairness manually
+	var spawn_a := maze.get_marker_position(Enums.MarkerType.SPAWN_A)
+	var spawn_b := maze.get_marker_position(Enums.MarkerType.SPAWN_B)
+	for target in [Enums.MarkerType.KEY_BRASS, Enums.MarkerType.KEY_JADE,
+			Enums.MarkerType.KEY_CRYSTAL, Enums.MarkerType.CHEST]:
+		var target_pos := maze.get_marker_position(target)
+		var path_a := maze.get_shortest_path(spawn_a, target_pos)
+		var path_b := maze.get_shortest_path(spawn_b, target_pos)
+		var delta: int = abs((path_a.size() - 1) - (path_b.size() - 1))
+		assert_true(delta <= 2, "Fairness delta for target %d is %d (max 2)" % [target, delta])
+
+
+func test_minimum_size_2x3_succeeds() -> void:
+	var gen := _make_generator()
+	watch_signals(gen)
+	gen.generate(2, 3)
+	assert_signal_emitted(gen, "maze_generated")
+
+
+func test_minimum_size_3x2_succeeds() -> void:
+	var gen := _make_generator()
+	watch_signals(gen)
+	gen.generate(3, 2)
+	assert_signal_emitted(gen, "maze_generated")
+
+
+func test_too_small_1x1_fails() -> void:
+	var gen := _make_generator()
+	watch_signals(gen)
+	gen.generate(1, 1)
+	assert_signal_emitted(gen, "generation_failed")
+	assert_signal_not_emitted(gen, "maze_generated")
+
+
+func test_too_small_2x2_fails() -> void:
+	var gen := _make_generator()
+	watch_signals(gen)
+	gen.generate(2, 2)
+	assert_signal_emitted(gen, "generation_failed")
+	assert_signal_not_emitted(gen, "maze_generated")
+
+
+func test_too_small_1x5_fails() -> void:
+	var gen := _make_generator()
+	watch_signals(gen)
+	gen.generate(1, 5)
+	assert_signal_emitted(gen, "generation_failed")
+	assert_signal_not_emitted(gen, "maze_generated")
+
+
+func test_randomness_produces_different_mazes() -> void:
+	var gen := _make_generator()
+	var wall_hashes: Array[int] = []
+	for i in range(10):
+		watch_signals(gen)
+		gen.generate(10, 10)
+		var maze: RefCounted = get_signal_parameters(gen, "maze_generated", i)[0]
+		# Hash the wall pattern
+		var h := 0
+		for y in range(10):
+			for x in range(10):
+				if maze.can_move(x, y, Enums.Direction.EAST):
+					h = h ^ (x * 31 + y * 37)
+				if maze.can_move(x, y, Enums.Direction.SOUTH):
+					h = h ^ (x * 41 + y * 43)
+		wall_hashes.append(h)
+	# At least 9 of 10 should be unique
+	var unique_count := 0
+	var seen: Dictionary = {}
+	for h in wall_hashes:
+		if not seen.has(h):
+			seen[h] = true
+			unique_count += 1
+	assert_gte(unique_count, 9, "At least 9 of 10 mazes should be unique")
+
+
+func test_boundary_walls_intact() -> void:
+	var gen := _make_generator()
+	watch_signals(gen)
+	gen.generate(5, 5)
+	var maze: RefCounted = get_signal_parameters(gen, "maze_generated", 0)[0]
+	# Top boundary
+	for x in range(5):
+		assert_true(maze.has_wall(x, 0, Enums.Direction.NORTH),
+			"Top boundary at x=%d should have NORTH wall" % x)
+	# Bottom boundary
+	for x in range(5):
+		assert_true(maze.has_wall(x, 4, Enums.Direction.SOUTH),
+			"Bottom boundary at x=%d should have SOUTH wall" % x)
+	# Left boundary
+	for y in range(5):
+		assert_true(maze.has_wall(0, y, Enums.Direction.WEST),
+			"Left boundary at y=%d should have WEST wall" % y)
+	# Right boundary
+	for y in range(5):
+		assert_true(maze.has_wall(4, y, Enums.Direction.EAST),
+			"Right boundary at y=%d should have EAST wall" % y)
+
+
+func test_large_maze_50x50_succeeds() -> void:
+	var gen := _make_generator()
+	watch_signals(gen)
+	gen.generate(50, 50)
+	assert_signal_emitted(gen, "maze_generated")
+	var maze: RefCounted = get_signal_parameters(gen, "maze_generated", 0)[0]
+	# Verify connectivity
+	var visited: Dictionary = {}
+	var queue: Array[Vector2i] = [Vector2i(0, 0)]
+	visited[Vector2i(0, 0)] = true
+	while queue.size() > 0:
+		var current: Vector2i = queue.pop_front()
+		for neighbor in maze.get_neighbors(current.x, current.y):
+			if not visited.has(neighbor):
+				visited[neighbor] = true
+				queue.append(neighbor)
+	assert_eq(visited.size(), 2500, "All 2500 cells should be reachable in 50x50")
