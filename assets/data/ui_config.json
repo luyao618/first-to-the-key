@@ -1,0 +1,39 @@
+{
+    "layout": {
+        "panel_ratio": 0.20
+    },
+    "renderer": {
+        "cell_size": 32,
+        "margin_ratio": 0.1,
+        "move_anim_ratio": 0.6,
+        "bump_anim_duration": 0.2,
+        "bump_offset": 4.0,
+        "float_anim_amplitude": 3.0,
+        "float_anim_period": 2.0,
+        "agent_a_color": "#4488FF",
+        "agent_b_color": "#FF4444",
+        "agent_overlap_offset": 3.0
+    },
+    "hud": {
+        "toast_duration": 3.0,
+        "toast_fade_duration": 0.5,
+        "key_slot_pulse_duration": 0.3,
+        "key_slot_pulse_scale": 1.3,
+        "timer_font_size": 24,
+        "toast_font_size": 28,
+        "hud_margin": 16
+    },
+    "prompt_input": {
+        "placeholder_text": "Explore unvisited directions first. When at a fork, prefer directions you haven't been to. If you see a key, go to it immediately. Avoid revisiting dead ends.",
+        "text_edit_min_lines": 8,
+        "show_char_count": true
+    },
+    "result": {
+        "result_title_font_size": 48,
+        "stat_font_size": 16,
+        "prompt_max_visible_lines": 6,
+        "winner_color_a": "#4488FF",
+        "winner_color_b": "#FF4444",
+        "draw_color": "#AAAAAA"
+    }
+}

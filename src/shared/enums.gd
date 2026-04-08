@@ -20,6 +20,8 @@ enum CellVisibility { UNKNOWN, VISIBLE, EXPLORED }
 
 enum GlobalKeyPhase { BRASS_ACTIVE, JADE_ACTIVE, CRYSTAL_ACTIVE, ALL_COLLECTED }
 
+enum RenderMode { GOD_VIEW, AGENT_VIEW }
+
 enum AgentKeyState { NEED_BRASS, NEED_JADE, NEED_CRYSTAL, KEYS_COMPLETE }
 
 enum ChestState { INACTIVE, ACTIVE }
