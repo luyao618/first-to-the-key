@@ -1,0 +1,4 @@
+{
+	"match": "res://scenes/match/Match.tscn",
+	"result": "res://scenes/result/Result.tscn"
+}
