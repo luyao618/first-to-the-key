@@ -31,6 +31,9 @@
       "Read(**/.env*)"
     ]
   },
+  "enabledPlugins": {
+    "superpowers@superpowers-marketplace": true
+  },
   "hooks": {
     "SessionStart": [
       {
