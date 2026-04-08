@@ -16,6 +16,8 @@ config/features=PackedStringArray("4.6")
 Enums="*res://src/shared/enums.gd"
 MatchStateManager="*res://src/core/match_state_manager.gd"
 SceneManagerGlobal="*res://src/core/scene_manager.gd"
+KeyCollection="*res://src/gameplay/key_collection.gd"
+LLMAgentManager="*res://src/ai/llm_agent_manager.gd"
 
 [display]
 

@@ -18,6 +18,31 @@ enum MoveDirection { NORTH, EAST, SOUTH, WEST, NONE }
 
 enum CellVisibility { UNKNOWN, VISIBLE, EXPLORED }
 
+enum GlobalKeyPhase { BRASS_ACTIVE, JADE_ACTIVE, CRYSTAL_ACTIVE, ALL_COLLECTED }
+
+enum AgentKeyState { NEED_BRASS, NEED_JADE, NEED_CRYSTAL, KEYS_COMPLETE }
+
+enum ChestState { INACTIVE, ACTIVE }
+
+enum AgentEligibility { INELIGIBLE, ELIGIBLE }
+
+enum RequestState { IDLE, IN_FLIGHT }
+
+## Key sequence: the fixed order of key collection.
+const KEY_SEQUENCE: Array = [
+	MarkerType.KEY_BRASS,
+	MarkerType.KEY_JADE,
+	MarkerType.KEY_CRYSTAL,
+]
+
+## MoveDirection -> opposite mapping.
+const OPPOSITE_MOVE_DIRECTION: Dictionary = {
+	MoveDirection.NORTH: MoveDirection.SOUTH,
+	MoveDirection.SOUTH: MoveDirection.NORTH,
+	MoveDirection.EAST: MoveDirection.WEST,
+	MoveDirection.WEST: MoveDirection.EAST,
+}
+
 
 ## Direction -> Vector2i offset mapping.
 const DIRECTION_OFFSETS: Dictionary = {
