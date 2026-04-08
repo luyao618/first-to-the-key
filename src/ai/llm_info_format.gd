@@ -135,7 +135,7 @@ func build_system_message(player_prompt: String, vision_radius: int) -> String:
 ## Build the state message for a specific agent at the current tick.
 ## All data is read live from upstream systems.
 func build_state_message(agent_id: int, maze: RefCounted, fog: Node, movement: Node, keys: Node, win_con: Node, tick_count: int) -> String:
-	var pos: Vector2i = movement.get_position(agent_id)
+	var pos: Vector2i = movement.get_position_of(agent_id)
 	var msg := ""
 
 	# Header
