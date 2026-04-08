@@ -118,3 +118,140 @@ func test_invalid_mover_id_queries() -> void:
 	assert_false(gm.has_visited(99, Vector2i(0, 0)))
 	assert_eq(gm.get_total_moves(99), 0)
 	assert_eq(gm.get_blocked_count(99), 0)
+
+
+func test_set_direction_and_move_east() -> void:
+	var gm := _make_gm()
+	gm.initialize()
+	watch_signals(gm)
+	gm.set_direction(0, Enums.MoveDirection.EAST)
+	gm.on_tick(1)
+	assert_eq(gm.get_position_of(0), Vector2i(1, 0), "Should move east to (1,0)")
+	assert_signal_emitted(gm, "mover_moved")
+	var params := get_signal_parameters(gm, "mover_moved", 0)
+	assert_eq(params[0], 0)  # mover_id
+	assert_eq(params[1], Vector2i(0, 0))  # old_pos
+	assert_eq(params[2], Vector2i(1, 0))  # new_pos
+
+
+func test_blocked_movement_stays_in_place() -> void:
+	var gm := _make_gm()
+	gm.initialize()
+	watch_signals(gm)
+	# Try to move north from (0,0) — always blocked (boundary wall)
+	gm.set_direction(0, Enums.MoveDirection.NORTH)
+	gm.on_tick(1)
+	assert_eq(gm.get_position_of(0), Vector2i(0, 0), "Should stay at (0,0)")
+	assert_signal_emitted(gm, "mover_blocked")
+	var params := get_signal_parameters(gm, "mover_blocked", 0)
+	assert_eq(params[0], 0)  # mover_id
+	assert_eq(params[1], Vector2i(0, 0))  # pos
+
+
+func test_blocked_increments_blocked_count() -> void:
+	var gm := _make_gm()
+	gm.initialize()
+	gm.set_direction(0, Enums.MoveDirection.NORTH)
+	gm.on_tick(1)
+	assert_eq(gm.get_blocked_count(0), 1)
+	gm.set_direction(0, Enums.MoveDirection.NORTH)
+	gm.on_tick(2)
+	assert_eq(gm.get_blocked_count(0), 2)
+
+
+func test_no_direction_emits_stayed() -> void:
+	var gm := _make_gm()
+	gm.initialize()
+	watch_signals(gm)
+	# No set_direction — pending is NONE
+	gm.on_tick(1)
+	assert_signal_emitted(gm, "mover_stayed")
+	var params := get_signal_parameters(gm, "mover_stayed", 0)
+	assert_eq(params[0], 0)  # mover_id
+	assert_eq(params[1], Vector2i(0, 0))  # pos
+
+
+func test_pending_direction_cleared_after_tick() -> void:
+	var gm := _make_gm()
+	gm.initialize()
+	gm.set_direction(0, Enums.MoveDirection.EAST)
+	gm.on_tick(1)
+	# Second tick without set_direction should stay
+	watch_signals(gm)
+	gm.on_tick(2)
+	assert_signal_emitted(gm, "mover_stayed")
+
+
+func test_total_moves_increments_on_success() -> void:
+	var gm := _make_gm()
+	gm.initialize()
+	gm.set_direction(0, Enums.MoveDirection.EAST)
+	gm.on_tick(1)
+	assert_eq(gm.get_total_moves(0), 1)
+	gm.set_direction(0, Enums.MoveDirection.EAST)
+	gm.on_tick(2)
+	assert_eq(gm.get_total_moves(0), 2)
+
+
+func test_visited_cells_no_duplicates() -> void:
+	var gm := _make_gm()
+	gm.initialize()
+	gm.set_direction(0, Enums.MoveDirection.EAST)
+	gm.on_tick(1)
+	gm.set_direction(0, Enums.MoveDirection.WEST)
+	gm.on_tick(2)
+	# Back at (0,0) — should not duplicate in visited_cells
+	var visited := gm.get_visited_cells(0)
+	var unique: Dictionary = {}
+	for v in visited:
+		assert_false(unique.has(v), "Duplicate visited cell: (%d,%d)" % [v.x, v.y])
+		unique[v] = true
+
+
+func test_last_set_direction_wins() -> void:
+	var gm := _make_gm()
+	gm.initialize()
+	gm.set_direction(0, Enums.MoveDirection.NORTH)  # Will be overwritten
+	gm.set_direction(0, Enums.MoveDirection.EAST)   # Last write wins
+	gm.on_tick(1)
+	assert_eq(gm.get_position_of(0), Vector2i(1, 0), "Last set_direction should win")
+
+
+func test_both_movers_process_in_same_tick() -> void:
+	var gm := _make_gm()
+	gm.initialize()
+	watch_signals(gm)
+	gm.set_direction(0, Enums.MoveDirection.EAST)
+	gm.set_direction(1, Enums.MoveDirection.WEST)
+	gm.on_tick(1)
+	# Mover 0 should move east from (0,0) to (1,0)
+	assert_eq(gm.get_position_of(0), Vector2i(1, 0), "Mover 0 should move east")
+	# Mover 1 at (4,4), west should be open in snake maze
+	assert_eq(gm.get_position_of(1), Vector2i(3, 4), "Mover 1 should move west")
+
+
+func test_invalid_mover_id_set_direction_no_crash() -> void:
+	var gm := _make_gm()
+	gm.initialize()
+	# Should not crash
+	gm.set_direction(99, Enums.MoveDirection.EAST)
+	gm.on_tick(1)
+	# Movers should be unaffected (stayed)
+	assert_eq(gm.get_position_of(0), Vector2i(0, 0))
+
+
+func test_direction_offsets_correct() -> void:
+	assert_eq(GridMovement.DIRECTION_OFFSETS[Enums.MoveDirection.NORTH], Vector2i(0, -1))
+	assert_eq(GridMovement.DIRECTION_OFFSETS[Enums.MoveDirection.EAST], Vector2i(1, 0))
+	assert_eq(GridMovement.DIRECTION_OFFSETS[Enums.MoveDirection.SOUTH], Vector2i(0, 1))
+	assert_eq(GridMovement.DIRECTION_OFFSETS[Enums.MoveDirection.WEST], Vector2i(-1, 0))
+
+
+func test_has_visited_returns_true_for_moved_cells() -> void:
+	var gm := _make_gm()
+	gm.initialize()
+	gm.set_direction(0, Enums.MoveDirection.EAST)
+	gm.on_tick(1)
+	assert_true(gm.has_visited(0, Vector2i(0, 0)), "Should have visited start")
+	assert_true(gm.has_visited(0, Vector2i(1, 0)), "Should have visited (1,0)")
+	assert_false(gm.has_visited(0, Vector2i(2, 0)), "Should not have visited (2,0)")
