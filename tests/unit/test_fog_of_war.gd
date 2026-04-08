@@ -243,3 +243,42 @@ func test_update_vision_invalid_agent_ignored() -> void:
 	# Should not crash, should not create new vision map
 	fog.update_vision(999, Vector2i(0, 0))
 	assert_eq(fog.get_visible_cells(999).size(), 0)
+
+
+func test_reinitialize_same_maze_resets_vision() -> void:
+	var maze := _make_open_maze()
+	var fog := _make_fog()
+	fog.initialize(maze, [0])
+	fog.update_vision(0, Vector2i(1, 1))
+	assert_gt(fog.get_visible_cells(0).size(), 0, "Should have visible cells")
+	# Reinitialize with same maze
+	fog.initialize(maze, [0])
+	assert_eq(fog.get_visible_cells(0).size(), 0, "Should be reset after reinitialize")
+	assert_eq(fog.get_cell_visibility(0, 1, 1), Enums.CellVisibility.UNKNOWN)
+
+
+func test_reinitialize_new_maze_different_size() -> void:
+	var maze_small := _make_open_maze(3, 3)
+	var fog := _make_fog()
+	fog.initialize(maze_small, [0, 1])
+	fog.update_vision(0, Vector2i(0, 0))
+
+	# Reinitialize with larger maze
+	var maze_large := _make_open_maze(5, 5)
+	fog.initialize(maze_large, [0, 1])
+	# Should handle new dimensions
+	assert_eq(fog.get_cell_visibility(0, 4, 4), Enums.CellVisibility.UNKNOWN)
+	assert_eq(fog.get_visible_cells(0).size(), 0)
+
+
+func test_reinitialize_different_agent_ids() -> void:
+	var maze := _make_open_maze()
+	var fog := _make_fog()
+	fog.initialize(maze, [0, 1])
+	fog.update_vision(0, Vector2i(0, 0))
+	# Reinitialize with different agents
+	fog.initialize(maze, [2, 3])
+	# Old agent 0 should no longer exist
+	assert_eq(fog.get_visible_cells(0).size(), 0)
+	# New agent 2 should start UNKNOWN
+	assert_eq(fog.get_cell_visibility(2, 0, 0), Enums.CellVisibility.UNKNOWN)
