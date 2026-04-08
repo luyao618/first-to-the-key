@@ -213,7 +213,7 @@ func test_get_visible_cells_sorted_row_major() -> void:
 	fog.initialize(maze, [0])
 	fog._vision_radius = 10  # See everything in 3x3
 	fog.update_vision(0, Vector2i(1, 1))
-	var visible := fog.get_visible_cells(0)
+	var visible: Array[Vector2i] = fog.get_visible_cells(0)
 	# Should be sorted: (0,0),(1,0),(2,0),(0,1),(1,1),(2,1),(0,2),(1,2),(2,2)
 	assert_eq(visible.size(), 9)
 	assert_eq(visible[0], Vector2i(0, 0))
@@ -230,7 +230,7 @@ func test_get_explored_cells_sorted_row_major() -> void:
 	fog._vision_radius = 1
 	fog.update_vision(0, Vector2i(0, 0))  # Sees (0,0), (1,0)
 	fog.update_vision(0, Vector2i(4, 0))  # (0,0),(1,0) -> EXPLORED; sees (3,0),(4,0)
-	var explored := fog.get_explored_cells(0)
+	var explored: Array[Vector2i] = fog.get_explored_cells(0)
 	assert_eq(explored.size(), 2)
 	assert_eq(explored[0], Vector2i(0, 0))
 	assert_eq(explored[1], Vector2i(1, 0))

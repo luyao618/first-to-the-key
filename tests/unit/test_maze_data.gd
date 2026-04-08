@@ -168,6 +168,7 @@ func test_is_valid_fails_missing_marker() -> void:
 	var maze := _make_valid_maze()
 	maze.remove_marker(1, 2, Enums.MarkerType.CHEST)
 	assert_false(maze.is_valid())
+	assert_push_error_count(1)
 
 
 func test_is_valid_fails_duplicate_marker_positions() -> void:
@@ -189,6 +190,7 @@ func test_is_valid_fails_duplicate_marker_positions() -> void:
 	maze.place_marker(2, 0, Enums.MarkerType.KEY_CRYSTAL)
 	maze.place_marker(2, 1, Enums.MarkerType.CHEST)
 	assert_false(maze.is_valid())
+	assert_push_error_count(1)
 
 
 func test_is_valid_fails_disconnected() -> void:
@@ -201,6 +203,7 @@ func test_is_valid_fails_disconnected() -> void:
 	maze.place_marker(2, 1, Enums.MarkerType.KEY_CRYSTAL)
 	maze.place_marker(1, 2, Enums.MarkerType.CHEST)
 	assert_false(maze.is_valid())
+	assert_push_error_count(1)
 
 
 func test_finalize_locks_writes() -> void:
@@ -211,11 +214,13 @@ func test_finalize_locks_writes() -> void:
 	assert_true(maze.has_wall(1, 1, Enums.Direction.NORTH), "set_wall should be rejected after finalize")
 	maze.place_marker(1, 1, Enums.MarkerType.CHEST)
 	assert_eq(maze.get_marker_position(Enums.MarkerType.CHEST), Vector2i(1, 2), "place_marker should be rejected after finalize")
+	assert_push_error_count(2)
 
 
 func test_finalize_fails_on_invalid_maze() -> void:
 	var maze := MazeData.new(3, 3)  # No markers
 	assert_false(maze.finalize())
+	assert_push_error_count(1)
 
 
 func test_reset_restores_initial_state() -> void:

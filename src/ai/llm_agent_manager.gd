@@ -1,8 +1,9 @@
 ## LLM Agent Manager - decision engine managing per-agent AI brains.
 ## Autoload singleton registered as "LLMAgentManager".
 ## See design/gdd/llm-agent-integration.md for full specification.
-class_name LLMAgentManager
 extends Node
+
+const ConfigLoader = preload("res://src/shared/config_loader.gd")
 
 # --- Signals ---
 signal api_request_sent(agent_id: int)
@@ -305,7 +306,7 @@ func _send_api_request(brain: Dictionary, _tick_count: int) -> void:
 	api_request_sent.emit(brain["agent_id"])
 
 	# Build request
-	var state_msg := _info_format.build_state_message(
+	var state_msg: String = _info_format.build_state_message(
 		brain["agent_id"], maze, fog, movement, keys, win_condition,
 		MatchStateManager.get_tick_count() if MatchStateManager != null else 0
 	)
@@ -383,7 +384,7 @@ func _on_http_completed(result: int, response_code: int, _headers: PackedStringA
 
 ## Handle pending API response text.
 func _handle_api_response(brain: Dictionary, response_text: String) -> void:
-	var parse_result := _info_format.parse_response(response_text)
+	var parse_result: Dictionary = _info_format.parse_response(response_text)
 	var agent_id: int = brain["agent_id"]
 
 	match parse_result["type"]:
@@ -418,13 +419,13 @@ func _validate_target(brain: Dictionary, target: Vector2i) -> bool:
 		return false
 
 	# Must not be current position
-	var current := movement.get_position_of(agent_id)
+	var current: Vector2i = movement.get_position_of(agent_id)
 	if target == current:
 		push_warning("LLMAgent: Target is current position: %s" % str(target))
 		return false
 
 	# Must be reachable
-	var path := maze.get_shortest_path(current, target)
+	var path: Array[Vector2i] = maze.get_shortest_path(current, target)
 	if path.size() < 2:
 		push_warning("LLMAgent: Target unreachable: %s" % str(target))
 		return false

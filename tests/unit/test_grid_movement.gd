@@ -70,7 +70,7 @@ func test_initialize_records_spawn_in_visited() -> void:
 func test_initialize_visited_cells_contains_spawn() -> void:
 	var gm := _make_gm()
 	gm.initialize()
-	var visited := gm.get_visited_cells(0)
+	var visited: Array[Vector2i] = gm.get_visited_cells(0)
 	assert_eq(visited.size(), 1)
 	assert_has(visited, Vector2i(0, 0))
 
@@ -128,7 +128,7 @@ func test_set_direction_and_move_east() -> void:
 	gm.on_tick(1)
 	assert_eq(gm.get_position_of(0), Vector2i(1, 0), "Should move east to (1,0)")
 	assert_signal_emitted(gm, "mover_moved")
-	var params := get_signal_parameters(gm, "mover_moved", 0)
+	var params: Array = get_signal_parameters(gm, "mover_moved", 0)
 	assert_eq(params[0], 0)  # mover_id
 	assert_eq(params[1], Vector2i(0, 0))  # old_pos
 	assert_eq(params[2], Vector2i(1, 0))  # new_pos
@@ -143,9 +143,9 @@ func test_blocked_movement_stays_in_place() -> void:
 	gm.on_tick(1)
 	assert_eq(gm.get_position_of(0), Vector2i(0, 0), "Should stay at (0,0)")
 	assert_signal_emitted(gm, "mover_blocked")
-	var params := get_signal_parameters(gm, "mover_blocked", 0)
-	assert_eq(params[0], 0)  # mover_id
-	assert_eq(params[1], Vector2i(0, 0))  # pos
+	var params2: Array = get_signal_parameters(gm, "mover_blocked", 0)
+	assert_eq(params2[0], 0)  # mover_id
+	assert_eq(params2[1], Vector2i(0, 0))  # pos
 
 
 func test_blocked_increments_blocked_count() -> void:
@@ -166,7 +166,7 @@ func test_no_direction_emits_stayed() -> void:
 	# No set_direction — pending is NONE
 	gm.on_tick(1)
 	assert_signal_emitted(gm, "mover_stayed")
-	var params := get_signal_parameters(gm, "mover_stayed", 0)
+	var params: Array = get_signal_parameters(gm, "mover_stayed", 0)
 	assert_eq(params[0], 0)  # mover_id
 	assert_eq(params[1], Vector2i(0, 0))  # pos
 
@@ -201,7 +201,7 @@ func test_visited_cells_no_duplicates() -> void:
 	gm.set_direction(0, Enums.MoveDirection.WEST)
 	gm.on_tick(2)
 	# Back at (0,0) — should not duplicate in visited_cells
-	var visited := gm.get_visited_cells(0)
+	var visited: Array[Vector2i] = gm.get_visited_cells(0)
 	var unique: Dictionary = {}
 	for v in visited:
 		assert_false(unique.has(v), "Duplicate visited cell: (%d,%d)" % [v.x, v.y])

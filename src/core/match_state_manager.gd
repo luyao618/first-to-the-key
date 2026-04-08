@@ -3,6 +3,8 @@
 ## See design/gdd/match-state-manager.md for full specification.
 extends Node
 
+const ConfigLoader = preload("res://src/shared/config_loader.gd")
+
 # --- Signals ---
 signal state_changed(old_state: int, new_state: int)
 signal tick(tick_count: int)

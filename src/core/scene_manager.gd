@@ -3,6 +3,8 @@
 ## See design/gdd/scene-manager.md for full specification.
 extends Node
 
+const ConfigLoader = preload("res://src/shared/config_loader.gd")
+
 # --- Signals ---
 signal scene_changing(old_name: String, new_name: String)
 signal scene_changed(new_name: String)

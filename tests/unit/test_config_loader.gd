@@ -11,6 +11,7 @@ func test_load_json_valid_file() -> void:
 func test_load_json_missing_file_returns_empty() -> void:
 	var data := ConfigLoader.load_json("res://nonexistent.json")
 	assert_eq(data.size(), 0, "Missing file should return empty dict")
+	assert_push_error_count(1)
 
 
 func test_get_or_default_existing_key() -> void:

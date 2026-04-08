@@ -4,6 +4,8 @@
 class_name FogOfWar
 extends Node
 
+const ConfigLoader = preload("res://src/shared/config_loader.gd")
+
 ## Note: CellVisibility enum is defined in Enums autoload (src/shared/enums.gd).
 ## Use Enums.CellVisibility.UNKNOWN / VISIBLE / EXPLORED.
 

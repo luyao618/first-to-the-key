@@ -4,19 +4,23 @@
 class_name MazeGenerator
 extends Node
 
+const ConfigLoader = preload("res://src/shared/config_loader.gd")
+
 signal maze_generated(maze_data: RefCounted)
 signal generation_failed(retry_count: int, reason: String)
 
 ## Config values (loaded from game_config.json).
 var _max_fairness_delta: int = 2
 var _max_generation_retries: int = 50
+var _config_loaded: bool = false
 
 
 ## Generate a maze with the given dimensions.
 ## Returns the finalized MazeData on success, null on failure.
 ## Also emits maze_generated / generation_failed signals.
 func generate(width: int, height: int) -> RefCounted:
-	_load_config()
+	if not _config_loaded:
+		_load_config()
 
 	# Minimum size check: need at least 6 cells for 6 markers, width >= 2, height >= 2
 	if width < 2 or height < 2 or width * height < 6:
@@ -159,3 +163,4 @@ func _load_config() -> void:
 	var gen_cfg: Dictionary = cfg.get("generator", {})
 	_max_fairness_delta = ConfigLoader.get_or_default(maze_cfg, "max_fairness_delta", 2)
 	_max_generation_retries = ConfigLoader.get_or_default(gen_cfg, "max_generation_retries", 50)
+	_config_loaded = true

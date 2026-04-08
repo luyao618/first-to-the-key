@@ -20,6 +20,7 @@ func test_go_to_nonexistent_scene_stays() -> void:
 	sm.go_to("nonexistent")
 	# Should log error but not crash
 	assert_eq(sm.current_scene_name, "", "Should remain empty")
+	assert_push_error_count(1)
 
 
 func test_scene_changing_signal_emitted() -> void:
@@ -38,10 +39,11 @@ func test_switching_state_blocks_reentrant_calls() -> void:
 
 func test_fallback_registry_when_config_missing() -> void:
 	# Create a fresh instance with no file
-	var sm2 := load("res://src/core/scene_manager.gd").new()
+	var sm2: Node = load("res://src/core/scene_manager.gd").new()
 	add_child_autoqfree(sm2)
 	sm2._config_path = "res://nonexistent_path.json"
 	sm2._initialize_registry()
 	# Should have fallback entries
 	assert_true(sm2._registry.has("match"))
 	assert_true(sm2._registry.has("result"))
+	assert_push_error_count(2)  # File not found + fallback warning

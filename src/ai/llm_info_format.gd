@@ -4,6 +4,8 @@
 class_name LLMInformationFormat
 extends RefCounted
 
+const ConfigLoader = preload("res://src/shared/config_loader.gd")
+
 # --- Configuration ---
 var include_ascii_map: bool = false
 var include_explored: bool = true
@@ -195,7 +197,7 @@ func build_state_message(agent_id: int, maze: RefCounted, fog: Node, movement: N
 	# Objective
 	var agent_state: int = keys.get_agent_progress(agent_id)
 	var objective := _get_objective_text(agent_state)
-	var keys_count := keys.get_keys_collected_count(agent_id)
+	var keys_count: int = keys.get_keys_collected_count(agent_id)
 	msg += "\nOBJECTIVE: %s\n" % objective
 	msg += "Keys collected: %d/3\n" % keys_count
 

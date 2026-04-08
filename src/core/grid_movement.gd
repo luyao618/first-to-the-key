@@ -13,7 +13,7 @@ signal mover_stayed(mover_id: int, pos: Vector2i)
 ## MazeData reference (read-only after finalize).
 var maze: RefCounted = null
 ## FogOfWar reference (only used in initialize for initial vision).
-var fog: RefCounted = null
+var fog: Node = null
 
 # --- Internal State ---
 ## Array of Mover dictionaries.

@@ -19,6 +19,7 @@ func before_each() -> void:
 	var gen := MazeGenerator.new()
 	add_child_autoqfree(gen)
 	gen._max_fairness_delta = 100
+	gen._config_loaded = true
 	maze = gen.generate(5, 5)
 	assert_not_null(maze)
 
@@ -47,9 +48,9 @@ func before_each() -> void:
 
 func test_key_collection_to_win_condition_signal_chain() -> void:
 	# Collect all three keys for agent 0
-	var brass_pos := maze.get_marker_position(Enums.MarkerType.KEY_BRASS)
-	var jade_pos := maze.get_marker_position(Enums.MarkerType.KEY_JADE)
-	var crystal_pos := maze.get_marker_position(Enums.MarkerType.KEY_CRYSTAL)
+	var brass_pos: Vector2i = maze.get_marker_position(Enums.MarkerType.KEY_BRASS)
+	var jade_pos: Vector2i = maze.get_marker_position(Enums.MarkerType.KEY_JADE)
+	var crystal_pos: Vector2i = maze.get_marker_position(Enums.MarkerType.KEY_CRYSTAL)
 
 	kc._on_mover_moved(0, Vector2i(-1, -1), brass_pos)
 	kc._on_mover_moved(0, Vector2i(-1, -1), jade_pos)
@@ -63,10 +64,10 @@ func test_key_collection_to_win_condition_signal_chain() -> void:
 
 func test_agent_reaches_chest_triggers_win() -> void:
 	# Collect all keys
-	var brass_pos := maze.get_marker_position(Enums.MarkerType.KEY_BRASS)
-	var jade_pos := maze.get_marker_position(Enums.MarkerType.KEY_JADE)
-	var crystal_pos := maze.get_marker_position(Enums.MarkerType.KEY_CRYSTAL)
-	var chest_pos := maze.get_marker_position(Enums.MarkerType.CHEST)
+	var brass_pos: Vector2i = maze.get_marker_position(Enums.MarkerType.KEY_BRASS)
+	var jade_pos: Vector2i = maze.get_marker_position(Enums.MarkerType.KEY_JADE)
+	var crystal_pos: Vector2i = maze.get_marker_position(Enums.MarkerType.KEY_CRYSTAL)
+	var chest_pos: Vector2i = maze.get_marker_position(Enums.MarkerType.CHEST)
 
 	kc._on_mover_moved(0, Vector2i(-1, -1), brass_pos)
 	kc._on_mover_moved(0, Vector2i(-1, -1), jade_pos)
@@ -78,7 +79,7 @@ func test_agent_reaches_chest_triggers_win() -> void:
 
 	# Resolve
 	watch_signals(wc)
-	var result := wc.resolve_pending()
+	var result: Dictionary = wc.resolve_pending()
 	assert_eq(result["type"], "win")
 	assert_eq(result["winner_id"], 0)
 	assert_signal_emitted(wc, "chest_opened")
@@ -86,10 +87,10 @@ func test_agent_reaches_chest_triggers_win() -> void:
 
 func test_ineligible_agent_at_chest_no_win() -> void:
 	# Agent 0 collects all keys
-	var brass_pos := maze.get_marker_position(Enums.MarkerType.KEY_BRASS)
-	var jade_pos := maze.get_marker_position(Enums.MarkerType.KEY_JADE)
-	var crystal_pos := maze.get_marker_position(Enums.MarkerType.KEY_CRYSTAL)
-	var chest_pos := maze.get_marker_position(Enums.MarkerType.CHEST)
+	var brass_pos: Vector2i = maze.get_marker_position(Enums.MarkerType.KEY_BRASS)
+	var jade_pos: Vector2i = maze.get_marker_position(Enums.MarkerType.KEY_JADE)
+	var crystal_pos: Vector2i = maze.get_marker_position(Enums.MarkerType.KEY_CRYSTAL)
+	var chest_pos: Vector2i = maze.get_marker_position(Enums.MarkerType.CHEST)
 
 	kc._on_mover_moved(0, Vector2i(-1, -1), brass_pos)
 	kc._on_mover_moved(0, Vector2i(-1, -1), jade_pos)
@@ -98,15 +99,15 @@ func test_ineligible_agent_at_chest_no_win() -> void:
 	# Agent 1 (no keys) reaches chest
 	wc.set_active(true)
 	wc._on_mover_moved(1, Vector2i(-1, -1), chest_pos)
-	var result := wc.resolve_pending()
+	var result: Dictionary = wc.resolve_pending()
 	assert_eq(result["type"], "none", "Ineligible agent should not trigger win")
 
 
 func test_both_agents_complete_same_tick_draw() -> void:
-	var brass_pos := maze.get_marker_position(Enums.MarkerType.KEY_BRASS)
-	var jade_pos := maze.get_marker_position(Enums.MarkerType.KEY_JADE)
-	var crystal_pos := maze.get_marker_position(Enums.MarkerType.KEY_CRYSTAL)
-	var chest_pos := maze.get_marker_position(Enums.MarkerType.CHEST)
+	var brass_pos: Vector2i = maze.get_marker_position(Enums.MarkerType.KEY_BRASS)
+	var jade_pos: Vector2i = maze.get_marker_position(Enums.MarkerType.KEY_JADE)
+	var crystal_pos: Vector2i = maze.get_marker_position(Enums.MarkerType.KEY_CRYSTAL)
+	var chest_pos: Vector2i = maze.get_marker_position(Enums.MarkerType.CHEST)
 
 	# Both agents collect all keys
 	kc._on_mover_moved(0, Vector2i(-1, -1), brass_pos)
@@ -120,13 +121,13 @@ func test_both_agents_complete_same_tick_draw() -> void:
 	wc.set_active(true)
 	wc._on_mover_moved(0, Vector2i(-1, -1), chest_pos)
 	wc._on_mover_moved(1, Vector2i(-1, -1), chest_pos)
-	var result := wc.resolve_pending()
+	var result: Dictionary = wc.resolve_pending()
 	assert_eq(result["type"], "draw")
 
 
 func test_reinitialize_full_pipeline() -> void:
 	# Complete a game
-	var brass_pos := maze.get_marker_position(Enums.MarkerType.KEY_BRASS)
+	var brass_pos: Vector2i = maze.get_marker_position(Enums.MarkerType.KEY_BRASS)
 	kc._on_mover_moved(0, Vector2i(-1, -1), brass_pos)
 
 	# Re-initialize everything (simulates Rematch)
