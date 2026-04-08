@@ -125,3 +125,41 @@ func set_wall(x: int, y: int, direction: int, value: bool) -> void:
 	if neighbor != null:
 		var opposite_dir: int = Enums.OPPOSITE_DIRECTION[direction]
 		neighbor["walls"][opposite_dir] = value
+
+
+## Place a marker at (x, y). Unique marker types (SPAWN, KEY, CHEST)
+## are auto-relocated: old position is cleared first.
+func place_marker(x: int, y: int, marker_type: int) -> void:
+	if _finalized:
+		push_error("MazeData is finalized, write operation rejected")
+		return
+
+	var cell = get_cell(x, y)
+	if cell == null:
+		return
+
+	# Remove from old position if this marker type already exists
+	if _marker_positions.has(marker_type):
+		var old_pos: Vector2i = _marker_positions[marker_type]
+		var old_cell = get_cell(old_pos.x, old_pos.y)
+		if old_cell != null:
+			old_cell["markers"].erase(marker_type)
+
+	cell["markers"].append(marker_type)
+	_marker_positions[marker_type] = Vector2i(x, y)
+
+
+## Remove a specific marker from (x, y).
+func remove_marker(x: int, y: int, marker_type: int) -> void:
+	if _finalized:
+		push_error("MazeData is finalized, write operation rejected")
+		return
+
+	var cell = get_cell(x, y)
+	if cell == null:
+		return
+
+	cell["markers"].erase(marker_type)
+
+	if _marker_positions.has(marker_type) and _marker_positions[marker_type] == Vector2i(x, y):
+		_marker_positions.erase(marker_type)
