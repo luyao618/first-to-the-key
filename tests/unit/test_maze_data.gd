@@ -46,3 +46,50 @@ func test_out_of_bounds_get_cell_returns_null() -> void:
 	assert_null(maze.get_cell(3, 0))
 	assert_null(maze.get_cell(0, -1))
 	assert_null(maze.get_cell(0, 3))
+
+
+func test_set_wall_removes_wall_and_syncs_neighbor() -> void:
+	var maze := MazeData.new(3, 3)
+	maze.set_wall(1, 1, Enums.Direction.EAST, false)
+	assert_false(maze.has_wall(1, 1, Enums.Direction.EAST), "(1,1) EAST should be open")
+	assert_false(maze.has_wall(2, 1, Enums.Direction.WEST), "(2,1) WEST should be open (synced)")
+
+
+func test_set_wall_adds_wall_and_syncs_neighbor() -> void:
+	var maze := MazeData.new(3, 3)
+	maze.set_wall(1, 1, Enums.Direction.EAST, false)  # Remove first
+	maze.set_wall(1, 1, Enums.Direction.EAST, true)   # Add back
+	assert_true(maze.has_wall(1, 1, Enums.Direction.EAST))
+	assert_true(maze.has_wall(2, 1, Enums.Direction.WEST))
+
+
+func test_boundary_wall_cannot_be_removed() -> void:
+	var maze := MazeData.new(3, 3)
+	maze.set_wall(0, 0, Enums.Direction.WEST, false)
+	assert_true(maze.has_wall(0, 0, Enums.Direction.WEST), "Left boundary wall must stay")
+
+	maze.set_wall(0, 0, Enums.Direction.NORTH, false)
+	assert_true(maze.has_wall(0, 0, Enums.Direction.NORTH), "Top boundary wall must stay")
+
+	maze.set_wall(2, 2, Enums.Direction.EAST, false)
+	assert_true(maze.has_wall(2, 2, Enums.Direction.EAST), "Right boundary wall must stay")
+
+	maze.set_wall(2, 2, Enums.Direction.SOUTH, false)
+	assert_true(maze.has_wall(2, 2, Enums.Direction.SOUTH), "Bottom boundary wall must stay")
+
+
+func test_can_move_after_wall_removal() -> void:
+	var maze := MazeData.new(3, 3)
+	maze.set_wall(1, 1, Enums.Direction.NORTH, false)
+	assert_true(maze.can_move(1, 1, Enums.Direction.NORTH))
+	assert_true(maze.can_move(1, 0, Enums.Direction.SOUTH))
+
+
+func test_get_neighbors_after_wall_removal() -> void:
+	var maze := MazeData.new(3, 3)
+	maze.set_wall(1, 1, Enums.Direction.EAST, false)
+	maze.set_wall(1, 1, Enums.Direction.SOUTH, false)
+	var neighbors := maze.get_neighbors(1, 1)
+	assert_eq(neighbors.size(), 2)
+	assert_has(neighbors, Vector2i(2, 1))
+	assert_has(neighbors, Vector2i(1, 2))

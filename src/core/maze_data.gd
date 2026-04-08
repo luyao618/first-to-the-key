@@ -88,3 +88,40 @@ func get_marker_position(marker_type: int) -> Vector2i:
 	if _marker_positions.has(marker_type):
 		return _marker_positions[marker_type]
 	return Vector2i(-1, -1)
+
+
+## Check if a wall is on the maze boundary.
+func _is_boundary_wall(x: int, y: int, direction: int) -> bool:
+	match direction:
+		Enums.Direction.NORTH: return y == 0
+		Enums.Direction.SOUTH: return y == height - 1
+		Enums.Direction.WEST: return x == 0
+		Enums.Direction.EAST: return x == width - 1
+	return false
+
+
+## Set wall state, syncing the shared wall on the neighbor cell.
+## Boundary walls cannot be removed (silently enforced).
+func set_wall(x: int, y: int, direction: int, value: bool) -> void:
+	if _finalized:
+		push_error("MazeData is finalized, write operation rejected")
+		return
+
+	var cell = get_cell(x, y)
+	if cell == null:
+		return
+
+	# Boundary walls are always true - ignore attempts to remove them
+	if not value and _is_boundary_wall(x, y, direction):
+		return
+
+	cell["walls"][direction] = value
+
+	# Sync the neighbor's corresponding wall
+	var offset: Vector2i = Enums.DIRECTION_OFFSETS[direction]
+	var nx := x + offset.x
+	var ny := y + offset.y
+	var neighbor = get_cell(nx, ny)
+	if neighbor != null:
+		var opposite_dir: int = Enums.OPPOSITE_DIRECTION[direction]
+		neighbor["walls"][opposite_dir] = value
