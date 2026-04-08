@@ -1,0 +1,260 @@
+## Maze Data Model - spatial data foundation for the entire game.
+## Represents a 2D grid maze with walls, markers, and pathfinding.
+## See design/gdd/maze-data-model.md for full specification.
+class_name MazeData
+extends RefCounted
+
+## Grid dimensions.
+var width: int
+var height: int
+
+## Internal cell storage. Access as _cells[y][x].
+## Each cell is a Dictionary: { "walls": {dir: bool}, "markers": Array[Enums.MarkerType] }
+var _cells: Array[Array] = []
+
+## Whether the maze is finalized (write-locked).
+var _finalized: bool = false
+
+## Marker position cache: MarkerType -> Vector2i.
+var _marker_positions: Dictionary = {}
+
+
+func _init(w: int, h: int) -> void:
+	width = w
+	height = h
+	_init_cells()
+
+
+## Initialize all cells with four walls and no markers.
+func _init_cells() -> void:
+	_cells.clear()
+	_marker_positions.clear()
+	for y in range(height):
+		var row: Array[Dictionary] = []
+		for x in range(width):
+			row.append({
+				"walls": {
+					Enums.Direction.NORTH: true,
+					Enums.Direction.EAST: true,
+					Enums.Direction.SOUTH: true,
+					Enums.Direction.WEST: true,
+				},
+				"markers": [] as Array[int],
+			})
+		_cells.append(row)
+
+
+## Returns the cell dictionary at (x, y), or null if out of bounds.
+func get_cell(x: int, y: int) -> Variant:
+	if x < 0 or x >= width or y < 0 or y >= height:
+		push_warning("MazeData: get_cell(%d, %d) out of bounds (size %dx%d)" % [x, y, width, height])
+		return null
+	return _cells[y][x]
+
+
+## Returns true if the specified wall exists.
+func has_wall(x: int, y: int, direction: int) -> bool:
+	var cell = get_cell(x, y)
+	if cell == null:
+		return true  # Out of bounds treated as walled
+	return cell["walls"][direction]
+
+
+## Returns true if movement in the given direction is possible (no wall).
+func can_move(x: int, y: int, direction: int) -> bool:
+	return not has_wall(x, y, direction)
+
+
+## Returns coordinates of all passable neighbors.
+func get_neighbors(x: int, y: int) -> Array[Vector2i]:
+	var result: Array[Vector2i] = []
+	for dir in [Enums.Direction.NORTH, Enums.Direction.EAST, Enums.Direction.SOUTH, Enums.Direction.WEST]:
+		if can_move(x, y, dir):
+			var offset: Vector2i = Enums.DIRECTION_OFFSETS[dir]
+			result.append(Vector2i(x + offset.x, y + offset.y))
+	return result
+
+
+## Returns all markers at the given position.
+func get_markers_at(x: int, y: int) -> Array:
+	var cell = get_cell(x, y)
+	if cell == null:
+		return []
+	return cell["markers"].duplicate()
+
+
+## Returns the position of a marker type, or Vector2i(-1, -1) if not placed.
+func get_marker_position(marker_type: int) -> Vector2i:
+	if _marker_positions.has(marker_type):
+		return _marker_positions[marker_type]
+	return Vector2i(-1, -1)
+
+
+## Check if a wall is on the maze boundary.
+func _is_boundary_wall(x: int, y: int, direction: int) -> bool:
+	match direction:
+		Enums.Direction.NORTH: return y == 0
+		Enums.Direction.SOUTH: return y == height - 1
+		Enums.Direction.WEST: return x == 0
+		Enums.Direction.EAST: return x == width - 1
+	return false
+
+
+## Set wall state, syncing the shared wall on the neighbor cell.
+## Boundary walls cannot be removed (silently enforced).
+func set_wall(x: int, y: int, direction: int, value: bool) -> void:
+	if _finalized:
+		push_error("MazeData is finalized, write operation rejected")
+		return
+
+	var cell = get_cell(x, y)
+	if cell == null:
+		return
+
+	# Boundary walls are always true - ignore attempts to remove them
+	if not value and _is_boundary_wall(x, y, direction):
+		return
+
+	cell["walls"][direction] = value
+
+	# Sync the neighbor's corresponding wall
+	var offset: Vector2i = Enums.DIRECTION_OFFSETS[direction]
+	var nx := x + offset.x
+	var ny := y + offset.y
+	var neighbor = get_cell(nx, ny)
+	if neighbor != null:
+		var opposite_dir: int = Enums.OPPOSITE_DIRECTION[direction]
+		neighbor["walls"][opposite_dir] = value
+
+
+## Place a marker at (x, y). Unique marker types (SPAWN, KEY, CHEST)
+## are auto-relocated: old position is cleared first.
+func place_marker(x: int, y: int, marker_type: int) -> void:
+	if _finalized:
+		push_error("MazeData is finalized, write operation rejected")
+		return
+
+	var cell = get_cell(x, y)
+	if cell == null:
+		return
+
+	# Remove from old position if this marker type already exists
+	if _marker_positions.has(marker_type):
+		var old_pos: Vector2i = _marker_positions[marker_type]
+		var old_cell = get_cell(old_pos.x, old_pos.y)
+		if old_cell != null:
+			old_cell["markers"].erase(marker_type)
+
+	cell["markers"].append(marker_type)
+	_marker_positions[marker_type] = Vector2i(x, y)
+
+
+## Remove a specific marker from (x, y).
+func remove_marker(x: int, y: int, marker_type: int) -> void:
+	if _finalized:
+		push_error("MazeData is finalized, write operation rejected")
+		return
+
+	var cell = get_cell(x, y)
+	if cell == null:
+		return
+
+	cell["markers"].erase(marker_type)
+
+	if _marker_positions.has(marker_type) and _marker_positions[marker_type] == Vector2i(x, y):
+		_marker_positions.erase(marker_type)
+
+
+## Validate maze integrity:
+## - All 6 required markers (SPAWN_A/B, KEY_BRASS/JADE/CRYSTAL, CHEST) exist
+## - All 6 marker positions are unique (no two markers on same cell)
+## - Maze is fully connected (BFS from SPAWN_A reaches all cells)
+func is_valid() -> bool:
+	var required_markers := [
+		Enums.MarkerType.SPAWN_A,
+		Enums.MarkerType.SPAWN_B,
+		Enums.MarkerType.KEY_BRASS,
+		Enums.MarkerType.KEY_JADE,
+		Enums.MarkerType.KEY_CRYSTAL,
+		Enums.MarkerType.CHEST,
+	]
+
+	# Check all required markers exist
+	for marker in required_markers:
+		if not _marker_positions.has(marker):
+			push_error("MazeData: Missing required marker: %d" % marker)
+			return false
+
+	# Check all marker positions are unique
+	var positions: Array[Vector2i] = []
+	for marker in required_markers:
+		var pos: Vector2i = _marker_positions[marker]
+		if pos in positions:
+			push_error("MazeData: Duplicate marker position at (%d, %d)" % [pos.x, pos.y])
+			return false
+		positions.append(pos)
+
+	# Check full connectivity via BFS from SPAWN_A
+	var start: Vector2i = _marker_positions[Enums.MarkerType.SPAWN_A]
+	var visited: Dictionary = {}
+	var queue: Array[Vector2i] = [start]
+	visited[start] = true
+
+	while queue.size() > 0:
+		var current: Vector2i = queue.pop_front()
+		for neighbor in get_neighbors(current.x, current.y):
+			if not visited.has(neighbor):
+				visited[neighbor] = true
+				queue.append(neighbor)
+
+	if visited.size() != width * height:
+		push_error("MazeData: Unreachable cells detected (%d reachable of %d total)" % [visited.size(), width * height])
+		return false
+
+	return true
+
+
+## Validate and lock the maze for reading. Returns true if valid.
+func finalize() -> bool:
+	if not is_valid():
+		return false
+	_finalized = true
+	return true
+
+
+## Reset to uninitialized state: all walls up, all markers cleared, writes unlocked.
+func reset() -> void:
+	_finalized = false
+	_init_cells()
+
+
+## BFS shortest path from start to goal. Returns array of Vector2i coordinates
+## including start and goal. Returns empty array if start == goal or unreachable.
+func get_shortest_path(start: Vector2i, goal: Vector2i) -> Array[Vector2i]:
+	if start == goal:
+		return [] as Array[Vector2i]
+
+	# BFS
+	var queue: Array[Vector2i] = [start]
+	var came_from: Dictionary = {}
+	came_from[start] = null
+
+	while queue.size() > 0:
+		var current: Vector2i = queue.pop_front()
+		if current == goal:
+			# Reconstruct path
+			var path: Array[Vector2i] = []
+			var node: Variant = goal
+			while node != null:
+				path.append(node)
+				node = came_from[node]
+			path.reverse()
+			return path
+
+		for neighbor in get_neighbors(current.x, current.y):
+			if not came_from.has(neighbor):
+				came_from[neighbor] = current
+				queue.append(neighbor)
+
+	# No path found
+	return [] as Array[Vector2i]

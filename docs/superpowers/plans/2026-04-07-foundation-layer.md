@@ -61,7 +61,7 @@ project.godot                  # Godot project file with Autoload registration
 - Create: `scenes/result/result.gd`
 - Create: `tests/unit/.gitkeep`
 
-- [ ] **Step 1: Install GUT addon**
+- [x] **Step 1: Install GUT addon**
 
 Run:
 ```bash
@@ -79,7 +79,7 @@ rm -rf addons/gut/.git
 
 Expected: `addons/gut/` directory exists with `plugin.cfg`
 
-- [ ] **Step 2: Create project.godot**
+- [x] **Step 2: Create project.godot**
 
 Create `project.godot`:
 
@@ -121,7 +121,7 @@ suffix=".gd"
 
 Note: SceneManager autoload is named `SceneManagerGlobal` to avoid conflict with Godot's internal SceneManager class.
 
-- [ ] **Step 3: Create shared enums**
+- [x] **Step 3: Create shared enums**
 
 Create `src/shared/enums.gd`:
 
@@ -162,7 +162,7 @@ const OPPOSITE_DIRECTION: Dictionary = {
 }
 ```
 
-- [ ] **Step 4: Create config loader utility**
+- [x] **Step 4: Create config loader utility**
 
 Create `src/shared/config_loader.gd`:
 
@@ -210,7 +210,7 @@ static func get_or_default(config: Dictionary, key: String, default_value: Varia
 	return default_value
 ```
 
-- [ ] **Step 5: Create game config JSON**
+- [x] **Step 5: Create game config JSON**
 
 Create `assets/data/game_config.json`:
 
@@ -247,7 +247,7 @@ Create `assets/data/game_config.json`:
 }
 ```
 
-- [ ] **Step 6: Create scene registry JSON**
+- [x] **Step 6: Create scene registry JSON**
 
 Create `assets/data/scene_registry.json`:
 
@@ -258,7 +258,7 @@ Create `assets/data/scene_registry.json`:
 }
 ```
 
-- [ ] **Step 7: Create placeholder Match scene**
+- [x] **Step 7: Create placeholder Match scene**
 
 Create `scenes/match/match.gd`:
 
@@ -281,7 +281,7 @@ script = ExtResource("1")
 TSCN
 ```
 
-- [ ] **Step 8: Create placeholder Result scene**
+- [x] **Step 8: Create placeholder Result scene**
 
 Create `scenes/result/result.gd`:
 
@@ -308,14 +308,14 @@ script = ExtResource("1")
 TSCN
 ```
 
-- [ ] **Step 9: Create test directory structure**
+- [x] **Step 9: Create test directory structure**
 
 ```bash
 mkdir -p tests/unit
 touch tests/unit/.gitkeep
 ```
 
-- [ ] **Step 10: Verify project structure**
+- [x] **Step 10: Verify project structure**
 
 Run:
 ```bash
@@ -335,7 +335,7 @@ Expected output should include:
 ./src/shared/enums.gd
 ```
 
-- [ ] **Step 11: Commit scaffolding**
+- [x] **Step 11: Commit scaffolding**
 
 ```bash
 git add project.godot src/shared/ assets/data/ scenes/ tests/ addons/gut/
@@ -358,7 +358,7 @@ git commit -m "feat: project scaffolding with GUT, shared enums, config loader, 
 - Create: `src/core/maze_data.gd`
 - Create: `tests/unit/test_maze_data.gd`
 
-- [ ] **Step 1: Write the failing test for MazeData construction and initial state**
+- [x] **Step 1: Write the failing test for MazeData construction and initial state**
 
 Create `tests/unit/test_maze_data.gd`:
 
@@ -413,13 +413,13 @@ func test_out_of_bounds_get_cell_returns_null() -> void:
 	assert_null(maze.get_cell(0, 3))
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_maze_data.gd -gexit`
 
 Expected: FAIL - cannot preload `maze_data.gd` (file doesn't exist)
 
-- [ ] **Step 3: Write MazeData with construction and basic queries**
+- [x] **Step 3: Write MazeData with construction and basic queries**
 
 Create `src/core/maze_data.gd`:
 
@@ -516,13 +516,13 @@ func get_marker_position(marker_type: int) -> Vector2i:
 	return Vector2i(-1, -1)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_maze_data.gd -gexit`
 
 Expected: All 6 tests PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/core/maze_data.gd tests/unit/test_maze_data.gd
@@ -537,7 +537,7 @@ git commit -m "feat: MazeData construction, walls, and basic queries (TDD)"
 - Modify: `src/core/maze_data.gd`
 - Modify: `tests/unit/test_maze_data.gd`
 
-- [ ] **Step 1: Write the failing tests for wall modification**
+- [x] **Step 1: Write the failing tests for wall modification**
 
 Append to `tests/unit/test_maze_data.gd`:
 
@@ -589,13 +589,13 @@ func test_get_neighbors_after_wall_removal() -> void:
 	assert_has(neighbors, Vector2i(1, 2))
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_maze_data.gd -gexit`
 
 Expected: FAIL - `set_wall` method doesn't exist
 
-- [ ] **Step 3: Implement set_wall with boundary protection and neighbor sync**
+- [x] **Step 3: Implement set_wall with boundary protection and neighbor sync**
 
 Add to `src/core/maze_data.gd` (after `get_marker_position`):
 
@@ -637,13 +637,13 @@ func set_wall(x: int, y: int, direction: int, value: bool) -> void:
 		neighbor["walls"][opposite_dir] = value
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_maze_data.gd -gexit`
 
 Expected: All 11 tests PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/core/maze_data.gd tests/unit/test_maze_data.gd
@@ -658,7 +658,7 @@ git commit -m "feat: MazeData wall modification with boundary protection and nei
 - Modify: `src/core/maze_data.gd`
 - Modify: `tests/unit/test_maze_data.gd`
 
-- [ ] **Step 1: Write the failing tests for marker placement**
+- [x] **Step 1: Write the failing tests for marker placement**
 
 Append to `tests/unit/test_maze_data.gd`:
 
@@ -705,13 +705,13 @@ func test_unplaced_marker_returns_negative_one() -> void:
 	assert_eq(maze.get_marker_position(Enums.MarkerType.CHEST), Vector2i(-1, -1))
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_maze_data.gd -gexit`
 
 Expected: FAIL - `place_marker` method doesn't exist
 
-- [ ] **Step 3: Implement marker placement with uniqueness enforcement**
+- [x] **Step 3: Implement marker placement with uniqueness enforcement**
 
 Add to `src/core/maze_data.gd`:
 
@@ -754,13 +754,13 @@ func remove_marker(x: int, y: int, marker_type: int) -> void:
 		_marker_positions.erase(marker_type)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_maze_data.gd -gexit`
 
 Expected: All 16 tests PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/core/maze_data.gd tests/unit/test_maze_data.gd
@@ -775,7 +775,7 @@ git commit -m "feat: MazeData marker placement with uniqueness enforcement"
 - Modify: `src/core/maze_data.gd`
 - Modify: `tests/unit/test_maze_data.gd`
 
-- [ ] **Step 1: Write the failing tests for validation and lifecycle**
+- [x] **Step 1: Write the failing tests for validation and lifecycle**
 
 Append to `tests/unit/test_maze_data.gd`:
 
@@ -902,13 +902,13 @@ func test_reset_then_finalize_works() -> void:
 	assert_true(maze.finalize())
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_maze_data.gd -gexit`
 
 Expected: FAIL - `is_valid`, `finalize`, `reset` methods don't exist
 
-- [ ] **Step 3: Implement is_valid, finalize, and reset**
+- [x] **Step 3: Implement is_valid, finalize, and reset**
 
 Add to `src/core/maze_data.gd`:
 
@@ -976,13 +976,13 @@ func reset() -> void:
 	_init_cells()
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_maze_data.gd -gexit`
 
 Expected: All 25 tests PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/core/maze_data.gd tests/unit/test_maze_data.gd
@@ -997,7 +997,7 @@ git commit -m "feat: MazeData validation, finalize, and reset lifecycle"
 - Modify: `src/core/maze_data.gd`
 - Modify: `tests/unit/test_maze_data.gd`
 
-- [ ] **Step 1: Write the failing tests for BFS shortest path**
+- [x] **Step 1: Write the failing tests for BFS shortest path**
 
 Append to `tests/unit/test_maze_data.gd`:
 
@@ -1049,13 +1049,13 @@ func test_shortest_path_finds_shorter_route() -> void:
 	assert_eq(path.size(), 3, "Should find shortest path (3 nodes = 2 steps)")
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_maze_data.gd -gexit`
 
 Expected: FAIL - `get_shortest_path` method doesn't exist
 
-- [ ] **Step 3: Implement BFS shortest path**
+- [x] **Step 3: Implement BFS shortest path**
 
 Add to `src/core/maze_data.gd`:
 
@@ -1092,13 +1092,13 @@ func get_shortest_path(start: Vector2i, goal: Vector2i) -> Array[Vector2i]:
 	return [] as Array[Vector2i]
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_maze_data.gd -gexit`
 
 Expected: All 30 tests PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/core/maze_data.gd tests/unit/test_maze_data.gd
@@ -1113,7 +1113,7 @@ git commit -m "feat: MazeData BFS shortest path algorithm"
 - Create: `src/core/match_state_manager.gd`
 - Create: `tests/unit/test_match_state_manager.gd`
 
-- [ ] **Step 1: Write the failing tests for FSM transitions**
+- [x] **Step 1: Write the failing tests for FSM transitions**
 
 Create `tests/unit/test_match_state_manager.gd`:
 
@@ -1231,13 +1231,13 @@ func _make_finalized_maze(MazeDataClass) -> RefCounted:
 	return maze
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_match_state_manager.gd -gexit`
 
 Expected: FAIL - file doesn't exist
 
-- [ ] **Step 3: Implement MatchStateManager FSM core**
+- [x] **Step 3: Implement MatchStateManager FSM core**
 
 Create `src/core/match_state_manager.gd`:
 
@@ -1407,13 +1407,13 @@ func _on_countdown_finished() -> void:
 	start_playing()
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_match_state_manager.gd -gexit`
 
 Expected: All 10 tests PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/core/match_state_manager.gd tests/unit/test_match_state_manager.gd
@@ -1427,7 +1427,7 @@ git commit -m "feat: MatchStateManager FSM with state transitions, tick timer, c
 **Files:**
 - Modify: `tests/unit/test_match_state_manager.gd`
 
-- [ ] **Step 1: Write tests for tick emission and timing**
+- [x] **Step 1: Write tests for tick emission and timing**
 
 Append to `tests/unit/test_match_state_manager.gd`:
 
@@ -1528,13 +1528,13 @@ func test_is_playing_query() -> void:
 	assert_true(msm.is_playing())
 ```
 
-- [ ] **Step 2: Run tests to verify they pass**
+- [x] **Step 2: Run tests to verify they pass**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_match_state_manager.gd -gexit`
 
 Expected: All 18 tests PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/unit/test_match_state_manager.gd
@@ -1549,7 +1549,7 @@ git commit -m "test: MatchStateManager tick, timing, and signal tests"
 - Create: `src/core/scene_manager.gd`
 - Create: `tests/unit/test_scene_manager.gd`
 
-- [ ] **Step 1: Write the failing tests for SceneManager**
+- [x] **Step 1: Write the failing tests for SceneManager**
 
 Create `tests/unit/test_scene_manager.gd`:
 
@@ -1603,13 +1603,13 @@ func test_fallback_registry_when_config_missing() -> void:
 	assert_true(sm2._registry.has("result"))
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_scene_manager.gd -gexit`
 
 Expected: FAIL - file doesn't exist
 
-- [ ] **Step 3: Implement SceneManager**
+- [x] **Step 3: Implement SceneManager**
 
 Create `src/core/scene_manager.gd`:
 
@@ -1703,13 +1703,13 @@ func _emit_scene_changed(scene_name: String) -> void:
 	scene_changed.emit(scene_name)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_scene_manager.gd -gexit`
 
 Expected: All 5 tests PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/core/scene_manager.gd tests/unit/test_scene_manager.gd
@@ -1723,7 +1723,7 @@ git commit -m "feat: SceneManager with eager cache, registry, scene switching, f
 **Files:**
 - Create: `tests/unit/test_config_loader.gd`
 
-- [ ] **Step 1: Write tests for ConfigLoader**
+- [x] **Step 1: Write tests for ConfigLoader**
 
 Create `tests/unit/test_config_loader.gd`:
 
@@ -1763,13 +1763,13 @@ func test_game_config_has_expected_values() -> void:
 	assert_eq(data["match"]["countdown_duration"], 3.0)
 ```
 
-- [ ] **Step 2: Run tests**
+- [x] **Step 2: Run tests**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_config_loader.gd -gexit`
 
 Expected: All 5 tests PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/unit/test_config_loader.gd
@@ -1782,19 +1782,19 @@ git commit -m "test: ConfigLoader unit tests for JSON loading and defaults"
 
 **Files:** None (verification only)
 
-- [ ] **Step 1: Run all tests**
+- [x] **Step 1: Run all tests**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gdir=res://tests/unit/ -gexit`
 
 Expected: All tests PASS (approximately 50+ tests across 4 test files)
 
-- [ ] **Step 2: Verify project launches**
+- [x] **Step 2: Verify project launches**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && timeout 10 godot --headless 2>&1 || true`
 
 Expected: No crash errors related to Autoloads or scene loading
 
-- [ ] **Step 3: Final commit with all tests passing**
+- [x] **Step 3: Final commit with all tests passing**
 
 Only if any fixes were needed:
 ```bash

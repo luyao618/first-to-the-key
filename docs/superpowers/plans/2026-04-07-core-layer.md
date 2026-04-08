@@ -42,7 +42,7 @@ tests/
 **Files:**
 - Modify: `src/shared/enums.gd`
 
-- [ ] **Step 1: Add CellVisibility enum to shared enums**
+- [x] **Step 1: Add CellVisibility enum to shared enums**
 
 Append to `src/shared/enums.gd` (after existing enums):
 
@@ -50,7 +50,7 @@ Append to `src/shared/enums.gd` (after existing enums):
 enum CellVisibility { UNKNOWN, VISIBLE, EXPLORED }
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add src/shared/enums.gd
@@ -67,7 +67,7 @@ FogOfWar is implemented first because GridMovement.initialize() calls fog.update
 - Create: `src/core/fog_of_war.gd`
 - Create: `tests/unit/test_fog_of_war.gd`
 
-- [ ] **Step 1: Write failing tests for FogOfWar construction and cell queries**
+- [x] **Step 1: Write failing tests for FogOfWar construction and cell queries**
 
 Create `tests/unit/test_fog_of_war.gd`:
 
@@ -164,13 +164,13 @@ func test_out_of_bounds_returns_unknown() -> void:
 	assert_eq(fog.get_cell_visibility(0, 99, 0), Enums.CellVisibility.UNKNOWN)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_fog_of_war.gd -gexit`
 
 Expected: FAIL — cannot preload `fog_of_war.gd` (file does not exist)
 
-- [ ] **Step 3: Implement FogOfWar with VisionMap, initialize, and basic queries**
+- [x] **Step 3: Implement FogOfWar with VisionMap, initialize, and basic queries**
 
 Create `src/core/fog_of_war.gd`:
 
@@ -330,13 +330,13 @@ static func _sort_row_major(a: Vector2i, b: Vector2i) -> bool:
 	return a.x < b.x
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_fog_of_war.gd -gexit`
 
 Expected: All 9 tests PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/core/fog_of_war.gd tests/unit/test_fog_of_war.gd
@@ -350,7 +350,7 @@ git commit -m "feat: FogOfWar with VisionMap data structure, initialize, and bou
 **Files:**
 - Modify: `tests/unit/test_fog_of_war.gd`
 
-- [ ] **Step 1: Write tests for vision update and three-state transitions**
+- [x] **Step 1: Write tests for vision update and three-state transitions**
 
 Append to `tests/unit/test_fog_of_war.gd`:
 
@@ -510,13 +510,13 @@ func test_update_vision_invalid_agent_ignored() -> void:
 	assert_eq(fog.get_visible_cells(999).size(), 0)
 ```
 
-- [ ] **Step 2: Run test to verify it passes**
+- [x] **Step 2: Run test to verify it passes**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_fog_of_war.gd -gexit`
 
 Expected: All 21 tests PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/unit/test_fog_of_war.gd
@@ -530,7 +530,7 @@ git commit -m "test: FogOfWar vision update, state transitions, wall blocking, s
 **Files:**
 - Modify: `tests/unit/test_fog_of_war.gd`
 
-- [ ] **Step 1: Write tests for reinitialize lifecycle**
+- [x] **Step 1: Write tests for reinitialize lifecycle**
 
 Append to `tests/unit/test_fog_of_war.gd`:
 
@@ -574,13 +574,13 @@ func test_reinitialize_different_agent_ids() -> void:
 	assert_eq(fog.get_cell_visibility(2, 0, 0), Enums.CellVisibility.UNKNOWN)
 ```
 
-- [ ] **Step 2: Run test to verify it passes**
+- [x] **Step 2: Run test to verify it passes**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_fog_of_war.gd -gexit`
 
 Expected: All 24 tests PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/unit/test_fog_of_war.gd
@@ -595,7 +595,7 @@ git commit -m "test: FogOfWar reinitialize lifecycle for rematch and new maze"
 - Create: `src/core/maze_generator.gd`
 - Create: `tests/unit/test_maze_generator.gd`
 
-- [ ] **Step 1: Write failing tests for DFS maze generation**
+- [x] **Step 1: Write failing tests for DFS maze generation**
 
 Create `tests/unit/test_maze_generator.gd`:
 
@@ -707,13 +707,13 @@ func test_markers_not_on_spawn_cells() -> void:
 		assert_ne(pos, spawn_b, "Marker %d should not be on SPAWN_B" % marker)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_maze_generator.gd -gexit`
 
 Expected: FAIL — cannot preload `maze_generator.gd` (file does not exist)
 
-- [ ] **Step 3: Implement MazeGenerator with iterative DFS, marker placement, and fairness validation**
+- [x] **Step 3: Implement MazeGenerator with iterative DFS, marker placement, and fairness validation**
 
 Create `src/core/maze_generator.gd`:
 
@@ -881,13 +881,13 @@ func _load_config() -> void:
 	_max_generation_retries = ConfigLoader.get_or_default(gen_cfg, "max_generation_retries", 50)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_maze_generator.gd -gexit`
 
 Expected: All 6 tests PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/core/maze_generator.gd tests/unit/test_maze_generator.gd
@@ -901,7 +901,7 @@ git commit -m "feat: MazeGenerator with iterative DFS, marker placement, fairnes
 **Files:**
 - Modify: `tests/unit/test_maze_generator.gd`
 
-- [ ] **Step 1: Write tests for fairness validation and edge cases**
+- [x] **Step 1: Write tests for fairness validation and edge cases**
 
 Append to `tests/unit/test_maze_generator.gd`:
 
@@ -1029,13 +1029,13 @@ func test_large_maze_50x50_succeeds() -> void:
 	assert_eq(visited.size(), 2500, "All 2500 cells should be reachable in 50x50")
 ```
 
-- [ ] **Step 2: Run tests to verify they pass**
+- [x] **Step 2: Run tests to verify they pass**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_maze_generator.gd -gexit`
 
 Expected: All 15 tests PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/unit/test_maze_generator.gd
@@ -1050,7 +1050,7 @@ git commit -m "test: MazeGenerator fairness, edge cases, randomness, boundary wa
 - Create: `src/core/grid_movement.gd`
 - Create: `tests/unit/test_grid_movement.gd`
 
-- [ ] **Step 1: Write failing tests for GridMovement initialization**
+- [x] **Step 1: Write failing tests for GridMovement initialization**
 
 Create `tests/unit/test_grid_movement.gd`:
 
@@ -1170,13 +1170,13 @@ func test_invalid_mover_id_queries() -> void:
 	assert_eq(gm.get_blocked_count(99), 0)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_grid_movement.gd -gexit`
 
 Expected: FAIL — cannot preload `grid_movement.gd` (file does not exist)
 
-- [ ] **Step 3: Implement GridMovement with Mover management, initialize, reset, queries**
+- [x] **Step 3: Implement GridMovement with Mover management, initialize, reset, queries**
 
 Create `src/core/grid_movement.gd`:
 
@@ -1355,13 +1355,13 @@ func get_blocked_count(mover_id: int) -> int:
 	return _movers[mover_id]["blocked_count"]
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_grid_movement.gd -gexit`
 
 Expected: All 8 tests PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/core/grid_movement.gd tests/unit/test_grid_movement.gd
@@ -1375,7 +1375,7 @@ git commit -m "feat: GridMovement with Mover management, initialize, reset, quer
 **Files:**
 - Modify: `tests/unit/test_grid_movement.gd`
 
-- [ ] **Step 1: Write tests for tick-based movement and signal emission**
+- [x] **Step 1: Write tests for tick-based movement and signal emission**
 
 Append to `tests/unit/test_grid_movement.gd`:
 
@@ -1517,13 +1517,13 @@ func test_has_visited_returns_true_for_moved_cells() -> void:
 	assert_false(gm.has_visited(0, Vector2i(2, 0)), "Should not have visited (2,0)")
 ```
 
-- [ ] **Step 2: Run test to verify it passes**
+- [x] **Step 2: Run test to verify it passes**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_grid_movement.gd -gexit`
 
 Expected: All 20 tests PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/unit/test_grid_movement.gd
@@ -1536,19 +1536,19 @@ git commit -m "test: GridMovement tick processing, movement, blocking, signals, 
 
 **Files:** None (verification only)
 
-- [ ] **Step 1: Run all Core Layer tests**
+- [x] **Step 1: Run all Core Layer tests**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_fog_of_war.gd -gtest=res://tests/unit/test_maze_generator.gd -gtest=res://tests/unit/test_grid_movement.gd -gexit`
 
 Expected: All tests PASS (approximately 59 tests across 3 test files)
 
-- [ ] **Step 2: Run ALL project tests (Foundation + Core)**
+- [x] **Step 2: Run ALL project tests (Foundation + Core)**
 
 Run: `cd /Users/yao/.superset/worktrees/first-to-the-key/session18 && godot --headless --script addons/gut/gut_cmdln.gd -gdir=res://tests/unit/ -gexit`
 
 Expected: All tests PASS (approximately 109+ tests across all test files)
 
-- [ ] **Step 3: Final commit if any fixes needed**
+- [x] **Step 3: Final commit if any fixes needed**
 
 Only if fixes were required:
 ```bash
