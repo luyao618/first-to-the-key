@@ -226,3 +226,35 @@ func finalize() -> bool:
 func reset() -> void:
 	_finalized = false
 	_init_cells()
+
+
+## BFS shortest path from start to goal. Returns array of Vector2i coordinates
+## including start and goal. Returns empty array if start == goal or unreachable.
+func get_shortest_path(start: Vector2i, goal: Vector2i) -> Array[Vector2i]:
+	if start == goal:
+		return [] as Array[Vector2i]
+
+	# BFS
+	var queue: Array[Vector2i] = [start]
+	var came_from: Dictionary = {}
+	came_from[start] = null
+
+	while queue.size() > 0:
+		var current: Vector2i = queue.pop_front()
+		if current == goal:
+			# Reconstruct path
+			var path: Array[Vector2i] = []
+			var node: Variant = goal
+			while node != null:
+				path.append(node)
+				node = came_from[node]
+			path.reverse()
+			return path
+
+		for neighbor in get_neighbors(current.x, current.y):
+			if not came_from.has(neighbor):
+				came_from[neighbor] = current
+				queue.append(neighbor)
+
+	# No path found
+	return [] as Array[Vector2i]

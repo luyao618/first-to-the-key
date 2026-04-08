@@ -257,3 +257,50 @@ func test_reset_then_finalize_works() -> void:
 	maze.place_marker(2, 1, Enums.MarkerType.KEY_CRYSTAL)
 	maze.place_marker(1, 2, Enums.MarkerType.CHEST)
 	assert_true(maze.finalize())
+
+
+func test_shortest_path_adjacent() -> void:
+	var maze := MazeData.new(3, 3)
+	maze.set_wall(0, 0, Enums.Direction.EAST, false)
+	var path := maze.get_shortest_path(Vector2i(0, 0), Vector2i(1, 0))
+	assert_eq(path.size(), 2, "Path should have 2 nodes (start + end)")
+	assert_eq(path[0], Vector2i(0, 0))
+	assert_eq(path[1], Vector2i(1, 0))
+
+
+func test_shortest_path_same_position() -> void:
+	var maze := MazeData.new(3, 3)
+	var path := maze.get_shortest_path(Vector2i(1, 1), Vector2i(1, 1))
+	assert_eq(path.size(), 0, "Same start and goal should return empty path")
+
+
+func test_shortest_path_no_connection() -> void:
+	var maze := MazeData.new(3, 3)  # All walls - no connections
+	var path := maze.get_shortest_path(Vector2i(0, 0), Vector2i(2, 2))
+	assert_eq(path.size(), 0, "Disconnected cells should return empty path")
+
+
+func test_shortest_path_linear() -> void:
+	var maze := MazeData.new(5, 1)
+	# Open a straight line: (0,0)-(1,0)-(2,0)-(3,0)-(4,0)
+	maze.set_wall(0, 0, Enums.Direction.EAST, false)
+	maze.set_wall(1, 0, Enums.Direction.EAST, false)
+	maze.set_wall(2, 0, Enums.Direction.EAST, false)
+	maze.set_wall(3, 0, Enums.Direction.EAST, false)
+	var path := maze.get_shortest_path(Vector2i(0, 0), Vector2i(4, 0))
+	assert_eq(path.size(), 5, "Path length should be 5 (0->1->2->3->4)")
+
+
+func test_shortest_path_finds_shorter_route() -> void:
+	# Create a maze with two paths: short (2 steps) and long (4 steps)
+	var maze := MazeData.new(3, 2)
+	# Short path: (0,0) -> (1,0) -> (2,0)
+	maze.set_wall(0, 0, Enums.Direction.EAST, false)
+	maze.set_wall(1, 0, Enums.Direction.EAST, false)
+	# Long path: (0,0) -> (0,1) -> (1,1) -> (2,1) -> (2,0)
+	maze.set_wall(0, 0, Enums.Direction.SOUTH, false)
+	maze.set_wall(0, 1, Enums.Direction.EAST, false)
+	maze.set_wall(1, 1, Enums.Direction.EAST, false)
+	maze.set_wall(2, 1, Enums.Direction.NORTH, false)
+	var path := maze.get_shortest_path(Vector2i(0, 0), Vector2i(2, 0))
+	assert_eq(path.size(), 3, "Should find shortest path (3 nodes = 2 steps)")
