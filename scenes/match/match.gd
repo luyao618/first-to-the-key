@@ -265,19 +265,8 @@ func _on_enter_finished() -> void:
 	if _hud != null:
 		_hud.set_playing(false)
 
-	# Resolve win condition
-	if _win_condition != null:
-		var win_result: Dictionary = _win_condition.resolve_pending()
-		match win_result["type"]:
-			"win":
-				var match_result: int
-				if win_result["winner_id"] == 0:
-					match_result = Enums.MatchResult.PLAYER_A_WIN
-				else:
-					match_result = Enums.MatchResult.PLAYER_B_WIN
-				MatchStateManager.finish_match(match_result, win_result["winner_id"])
-			"draw":
-				MatchStateManager.finish_match(Enums.MatchResult.DRAW, -1)
+	# Result and winner_id are already set by finish_match() which triggered
+	# this state change. No need to resolve_pending() again.
 
 	# Switch to Result scene
 	SceneManagerGlobal.go_to("result")
