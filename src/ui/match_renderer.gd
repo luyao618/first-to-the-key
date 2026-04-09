@@ -29,9 +29,20 @@ var _key_sprites: Dictionary = {}    # MarkerType -> Sprite2D
 var _chest_sprite: Sprite2D = null
 var _agent_tweens: Dictionary = {}   # agent_id -> Tween (current movement tween)
 
+# --- Art Asset Textures ---
+var _tex_agent_a: Texture2D = null
+var _tex_agent_b: Texture2D = null
+var _tex_key_brass: Texture2D = null
+var _tex_key_jade: Texture2D = null
+var _tex_key_crystal: Texture2D = null
+var _tex_chest: Texture2D = null
+var _tex_floor: Texture2D = null
+var _tex_wall: Texture2D = null
+
 
 func _ready() -> void:
 	_load_config()
+	_load_art_assets()
 
 
 func _load_config() -> void:
@@ -54,10 +65,33 @@ func _load_config() -> void:
 	_cell_size = ConfigLoader.get_or_default(maze_cfg, "cell_size", _cell_size)
 
 
+## Load art asset textures from disk. Falls back to placeholder if missing.
+func _load_art_assets() -> void:
+	_tex_agent_a = _try_load_texture("res://assets/art/sprites/agent_a.png")
+	_tex_agent_b = _try_load_texture("res://assets/art/sprites/agent_b.png")
+	_tex_key_brass = _try_load_texture("res://assets/art/sprites/items/key_brass.png")
+	_tex_key_jade = _try_load_texture("res://assets/art/sprites/items/key_jade.png")
+	_tex_key_crystal = _try_load_texture("res://assets/art/sprites/items/key_crystal.png")
+	_tex_chest = _try_load_texture("res://assets/art/sprites/items/chest.png")
+	_tex_floor = _try_load_texture("res://assets/art/tiles/floor.png")
+	_tex_wall = _try_load_texture("res://assets/art/tiles/wall.png")
+
+
+## Try to load a texture from the given path. Returns null if not found.
+func _try_load_texture(path: String) -> Texture2D:
+	if not ResourceLoader.exists(path):
+		push_warning("MatchRenderer: Art asset not found: %s — using placeholder" % path)
+		return null
+	return load(path) as Texture2D
+
+
 ## Build all render layers from MazeData.
 func initialize(maze: RefCounted) -> void:
 	cleanup()
 	_maze = maze
+
+	# Dynamically compute cell_size so the maze fills the viewport
+	_compute_cell_size()
 
 	# Create layer containers
 	_maze_layer = Node2D.new()
@@ -80,12 +114,42 @@ func initialize(maze: RefCounted) -> void:
 	_build_agents()
 
 
+## Compute cell_size so the maze fills the SubViewport with a small margin.
+func _compute_cell_size() -> void:
+	if _maze == null:
+		return
+	var vp := get_viewport()
+	if vp == null:
+		return
+	var vp_size: Vector2i = vp.size
+	if vp_size.x <= 0 or vp_size.y <= 0:
+		return
+	# Leave a margin around the edges
+	var usable_w: float = vp_size.x * (1.0 - _margin_ratio * 2.0)
+	var usable_h: float = vp_size.y * (1.0 - _margin_ratio * 2.0)
+	var cell_w := int(usable_w / _maze.width)
+	var cell_h := int(usable_h / _maze.height)
+	_cell_size = mini(cell_w, cell_h)
+	if _cell_size < 8:
+		_cell_size = 8  # Floor to avoid degenerate rendering
+
+	# Center the maze in the viewport
+	var maze_w: float = _maze.width * _cell_size
+	var maze_h: float = _maze.height * _cell_size
+	position = Vector2(
+		(vp_size.x - maze_w) / 2.0,
+		(vp_size.y - maze_h) / 2.0
+	)
+
+
 ## Draw maze walls and floors using simple draw calls.
 ## MVP: Uses _draw() on child nodes instead of TileMap for simplicity.
 func _build_maze_grid() -> void:
 	var grid_drawer := _MazeGridDrawer.new()
 	grid_drawer.maze = _maze
 	grid_drawer.cell_size = _cell_size
+	grid_drawer.floor_texture = _tex_floor
+	grid_drawer.wall_texture = _tex_wall
 	_maze_layer.add_child(grid_drawer)
 
 
@@ -100,7 +164,13 @@ func _build_markers() -> void:
 
 		var sprite := Sprite2D.new()
 		sprite.position = grid_to_pixel(pos)
-		sprite.texture = _create_placeholder_texture(_get_key_color(key_type), 16)
+
+		var art_tex: Texture2D = _get_key_texture(key_type)
+		if art_tex != null:
+			sprite.texture = art_tex
+			_fit_sprite_to_cell(sprite, _cell_size * 0.7)
+		else:
+			sprite.texture = _create_placeholder_texture(_get_key_color(key_type), 16)
 		sprite.z_index = 1
 
 		# Hardcoded initial visibility: only Brass visible
@@ -114,7 +184,12 @@ func _build_markers() -> void:
 	if chest_pos != Vector2i(-1, -1):
 		_chest_sprite = Sprite2D.new()
 		_chest_sprite.position = grid_to_pixel(chest_pos)
-		_chest_sprite.texture = _create_placeholder_texture(Color(0.8, 0.7, 0.2), 24)
+
+		if _tex_chest != null:
+			_chest_sprite.texture = _tex_chest
+			_fit_sprite_to_cell(_chest_sprite, _cell_size * 0.85)
+		else:
+			_chest_sprite.texture = _create_placeholder_texture(Color(0.8, 0.7, 0.2), 24)
 		_chest_sprite.visible = false  # Chest starts inactive
 		_chest_sprite.z_index = 1
 		_marker_layer.add_child(_chest_sprite)
@@ -129,7 +204,13 @@ func _build_agents() -> void:
 
 		var sprite := Sprite2D.new()
 		sprite.position = grid_to_pixel(spawn_pos)
-		sprite.texture = _create_placeholder_texture(color, 24)
+
+		var art_tex: Texture2D = _tex_agent_a if i == 0 else _tex_agent_b
+		if art_tex != null:
+			sprite.texture = art_tex
+			_fit_sprite_to_cell(sprite, _cell_size * 0.9)
+		else:
+			sprite.texture = _create_placeholder_texture(color, 24)
 		sprite.z_index = 2
 		_agent_layer.add_child(sprite)
 		_agent_sprites[i] = sprite
@@ -197,11 +278,13 @@ func show_key(key_type: int) -> void:
 	var sprite: Sprite2D = _key_sprites[key_type]
 	sprite.visible = true
 	sprite.modulate.a = 0.0
-	sprite.scale = Vector2(0.5, 0.5)
+	# Remember the fitted scale so we animate TO it, not to (1,1)
+	var target_scale: Vector2 = sprite.scale
+	sprite.scale = target_scale * 0.5
 	var tween := create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(sprite, "modulate:a", 1.0, 0.5)
-	tween.tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.5).set_ease(Tween.EASE_OUT)
+	tween.tween_property(sprite, "scale", target_scale, 0.5).set_ease(Tween.EASE_OUT)
 
 
 ## Handle key collected - adjust opacity.
@@ -221,11 +304,13 @@ func show_chest() -> void:
 		return
 	_chest_sprite.visible = true
 	_chest_sprite.modulate.a = 0.0
-	_chest_sprite.scale = Vector2(0.5, 0.5)
+	# Remember the fitted scale so we animate TO it, not to (1,1)
+	var target_scale: Vector2 = _chest_sprite.scale
+	_chest_sprite.scale = target_scale * 0.5
 	var tween := create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(_chest_sprite, "modulate:a", 1.0, 0.5)
-	tween.tween_property(_chest_sprite, "scale", Vector2(1.0, 1.0), 0.5).set_ease(Tween.EASE_OUT)
+	tween.tween_property(_chest_sprite, "scale", target_scale, 0.5).set_ease(Tween.EASE_OUT)
 
 
 # --- Cleanup ---
@@ -252,6 +337,27 @@ func _get_key_color(key_type: int) -> Color:
 	return Color.WHITE
 
 
+## Get the art texture for a key type. Returns null if not loaded.
+func _get_key_texture(key_type: int) -> Texture2D:
+	match key_type:
+		Enums.MarkerType.KEY_BRASS: return _tex_key_brass
+		Enums.MarkerType.KEY_JADE: return _tex_key_jade
+		Enums.MarkerType.KEY_CRYSTAL: return _tex_key_crystal
+	return null
+
+
+## Scale a sprite uniformly so its longest side fits target_size pixels.
+func _fit_sprite_to_cell(sprite: Sprite2D, target_size: float) -> void:
+	if sprite.texture == null:
+		return
+	var tex_size := sprite.texture.get_size()
+	var max_dim := maxf(tex_size.x, tex_size.y)
+	if max_dim <= 0.0:
+		return
+	var s := target_size / max_dim
+	sprite.scale = Vector2(s, s)
+
+
 ## Create a simple colored square texture as placeholder.
 func _create_placeholder_texture(color: Color, size: int) -> ImageTexture:
 	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
@@ -263,6 +369,8 @@ func _create_placeholder_texture(color: Color, size: int) -> ImageTexture:
 class _MazeGridDrawer extends Node2D:
 	var maze: RefCounted
 	var cell_size: int = 32
+	var floor_texture: Texture2D = null
+	var wall_texture: Texture2D = null
 
 	func _draw() -> void:
 		if maze == null:
@@ -275,18 +383,47 @@ class _MazeGridDrawer extends Node2D:
 		for y in range(maze.height):
 			for x in range(maze.width):
 				var rect := Rect2(x * cell_size, y * cell_size, cell_size, cell_size)
-				draw_rect(rect, floor_color)
+				if floor_texture != null:
+					draw_texture_rect(floor_texture, rect, false)
+				else:
+					draw_rect(rect, floor_color)
 
 		# Draw walls
 		for y in range(maze.height):
 			for x in range(maze.width):
 				var ox: float = x * cell_size
 				var oy: float = y * cell_size
+
 				if maze.has_wall(x, y, Enums.Direction.NORTH):
-					draw_line(Vector2(ox, oy), Vector2(ox + cell_size, oy), wall_color, wall_width)
+					if wall_texture != null:
+						_draw_wall_segment(ox, oy, ox + cell_size, oy, wall_width)
+					else:
+						draw_line(Vector2(ox, oy), Vector2(ox + cell_size, oy), wall_color, wall_width)
 				if maze.has_wall(x, y, Enums.Direction.EAST):
-					draw_line(Vector2(ox + cell_size, oy), Vector2(ox + cell_size, oy + cell_size), wall_color, wall_width)
+					if wall_texture != null:
+						_draw_wall_segment(ox + cell_size, oy, ox + cell_size, oy + cell_size, wall_width)
+					else:
+						draw_line(Vector2(ox + cell_size, oy), Vector2(ox + cell_size, oy + cell_size), wall_color, wall_width)
 				if maze.has_wall(x, y, Enums.Direction.SOUTH):
-					draw_line(Vector2(ox, oy + cell_size), Vector2(ox + cell_size, oy + cell_size), wall_color, wall_width)
+					if wall_texture != null:
+						_draw_wall_segment(ox, oy + cell_size, ox + cell_size, oy + cell_size, wall_width)
+					else:
+						draw_line(Vector2(ox, oy + cell_size), Vector2(ox + cell_size, oy + cell_size), wall_color, wall_width)
 				if maze.has_wall(x, y, Enums.Direction.WEST):
-					draw_line(Vector2(ox, oy), Vector2(ox, oy + cell_size), wall_color, wall_width)
+					if wall_texture != null:
+						_draw_wall_segment(ox, oy, ox, oy + cell_size, wall_width)
+					else:
+						draw_line(Vector2(ox, oy), Vector2(ox, oy + cell_size), wall_color, wall_width)
+
+
+	## Draw a wall segment as a thin textured rect along a line.
+	func _draw_wall_segment(x0: float, y0: float, x1: float, y1: float, thickness: float) -> void:
+		var wall_thick := thickness * 2.0
+		if absf(y0 - y1) < 0.01:
+			# Horizontal wall
+			var rect := Rect2(x0, y0 - wall_thick / 2.0, x1 - x0, wall_thick)
+			draw_texture_rect(wall_texture, rect, false)
+		else:
+			# Vertical wall
+			var rect := Rect2(x0 - wall_thick / 2.0, y0, wall_thick, y1 - y0)
+			draw_texture_rect(wall_texture, rect, false)
