@@ -242,8 +242,13 @@ func _process_brain_tick(brain: Dictionary, tick_count: int) -> void:
 	if brain["last_move_direction"] == Enums.MoveDirection.NONE:
 		if brain["request_state"] == Enums.RequestState.IDLE:
 			_send_api_request(brain, tick_count)
+		# In simulate mode, queue is filled synchronously — try consuming now
+		var first_dir := _consume_queue(brain)
+		if first_dir != Enums.MoveDirection.NONE:
+			movement.set_direction(agent_id, first_dir)
+			return
 		brain["total_idle_ticks"] += 1
-		# Don't set any direction (stay in place)
+		# Don't set any direction (stay in place, waiting for async API)
 		return
 
 	# Try consuming from path queue
@@ -297,8 +302,8 @@ func _on_mover_blocked(mover_id: int, _pos: Vector2i, _direction: int) -> void:
 ## Send API request (or simulate for offline/test mode).
 func _send_api_request(brain: Dictionary, _tick_count: int) -> void:
 	if brain["api_key"].is_empty():
-		# No API key - can't make real requests
-		# Mark as idle so tests can inject responses
+		# No API key — use simulated random movement for testing
+		_simulate_random_decision(brain)
 		return
 
 	brain["request_state"] = Enums.RequestState.IN_FLIGHT
@@ -439,3 +444,35 @@ func _cancel_request(brain: Dictionary) -> void:
 		brain["http_request"].cancel_request()
 	brain["request_state"] = Enums.RequestState.IDLE
 	brain["pending_response"] = ""
+
+
+# --- Simulation Mode (No API Key) ---
+
+## Simulate a random decision when no API key is configured.
+## Picks a random open direction from current position, preferring
+## non-reverse directions to avoid back-and-forth.
+func _simulate_random_decision(brain: Dictionary) -> void:
+	var agent_id: int = brain["agent_id"]
+	var pos: Vector2i = movement.get_position_of(agent_id)
+	var open_dirs: Array[int] = _get_open_move_dirs(pos)
+
+	if open_dirs.is_empty():
+		return
+
+	# Prefer forward directions (exclude reverse of last move)
+	var last_dir: int = brain["last_move_direction"]
+	var forward_dirs: Array[int] = []
+	if last_dir != Enums.MoveDirection.NONE:
+		var reverse: int = Enums.OPPOSITE_MOVE_DIRECTION[last_dir]
+		for d in open_dirs:
+			if d != reverse:
+				forward_dirs.append(d)
+
+	var chosen_dir: int
+	if forward_dirs.size() > 0:
+		chosen_dir = forward_dirs[randi() % forward_dirs.size()]
+	else:
+		chosen_dir = open_dirs[randi() % open_dirs.size()]
+
+	brain["path_queue"] = [chosen_dir] as Array[int]
+	decision_made.emit(agent_id, Vector2i(-1, -1))

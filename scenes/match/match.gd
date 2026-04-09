@@ -31,6 +31,10 @@ var _hud: Node = null
 var _panel_ratio: float = 0.20
 var _maze: RefCounted = null
 
+## Dev mode: skip prompt input and auto-start with default prompts.
+## Change to false for normal gameplay with prompt input.
+const DEV_SKIP_PROMPTS: bool = true
+
 
 func _ready() -> void:
 	_load_config()
@@ -42,8 +46,12 @@ func _ready() -> void:
 	MatchStateManager.tick.connect(_on_tick)
 	MatchStateManager.setup_failed.connect(_on_setup_failed)
 
-	# Start in SETUP: show prompt input
-	_setup_prompt_input()
+	if DEV_SKIP_PROMPTS:
+		# Skip prompt input, use default prompts, go straight to match
+		call_deferred("_on_prompts_submitted", "Explore the maze efficiently", "Find keys quickly")
+	else:
+		# Normal flow: show prompt input
+		_setup_prompt_input()
 
 
 func _load_config() -> void:
@@ -100,6 +108,9 @@ func _initialize_match_systems() -> bool:
 
 	# Generate maze
 	_maze_gen = MazeGenerator.new()
+	_maze_gen.generation_failed.connect(func(retries: int, reason: String) -> void:
+		push_error("Match: MazeGenerator failed after %d retries: %s" % [retries, reason])
+	)
 	add_child(_maze_gen)
 
 	var maze_cfg: Dictionary = game_cfg.get("maze", {})
