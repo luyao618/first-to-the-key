@@ -25,16 +25,18 @@ var _info_format: RefCounted = null  # LLMInformationFormat
 var _active: bool = false
 
 # --- Config defaults ---
-var _default_api_endpoint: String = "https://api.openai.com/v1/chat/completions"
-var _default_model: String = "gpt-4o"
-var _default_api_timeout: float = 10.0
+var _default_api_endpoint: String = "https://openrouter.ai/api/v1/chat/completions"
+var _default_model: String = "google/gemini-2.0-flash-001"
+var _default_api_timeout: float = 15.0
 var _default_temperature: float = 0.3
-var _default_max_tokens: int = 50
+var _default_max_tokens: int = 100
 var _default_max_queue_length: int = 20
+var _default_api_key: String = ""
 
 
 func _ready() -> void:
 	_info_format = preload("res://src/ai/llm_info_format.gd").new()
+	_load_llm_config()
 
 
 ## Initialize brains for both agents. Config is a Dictionary with optional
@@ -46,6 +48,52 @@ func initialize(config: Dictionary = {}) -> void:
 		var llm_cfg: Dictionary = config.get("llm_config_%s" % suffix, {})
 		var prompt: String = config.get("prompt_%s" % suffix, "")
 		_brains.append(_create_brain(i, llm_cfg, prompt))
+
+
+## Load LLM configuration from game_config.json and .env file.
+func _load_llm_config() -> void:
+	var cfg := ConfigLoader.load_json("res://assets/data/game_config.json")
+	var llm_cfg: Dictionary = cfg.get("llm", {})
+
+	_default_api_endpoint = ConfigLoader.get_or_default(llm_cfg, "api_endpoint", _default_api_endpoint)
+	_default_model = ConfigLoader.get_or_default(llm_cfg, "model", _default_model)
+	_default_api_timeout = ConfigLoader.get_or_default(llm_cfg, "api_timeout", _default_api_timeout)
+	_default_temperature = ConfigLoader.get_or_default(llm_cfg, "temperature", _default_temperature)
+	_default_max_tokens = ConfigLoader.get_or_default(llm_cfg, "max_tokens", _default_max_tokens)
+
+	# Load API key from .env file
+	var env_key_name: String = ConfigLoader.get_or_default(llm_cfg, "env_key_name", "OPENROUTER_API_KEY")
+	var env_vars: Dictionary = _load_env_file("res://.env")
+	if env_vars.has(env_key_name):
+		_default_api_key = env_vars[env_key_name]
+	else:
+		push_warning("LLMAgentManager: API key '%s' not found in .env — using simulation mode" % env_key_name)
+
+
+## Load key=value pairs from a .env file. Returns empty dict on failure.
+func _load_env_file(path: String) -> Dictionary:
+	var result: Dictionary = {}
+	if not FileAccess.file_exists(path):
+		return result
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return result
+	while not file.eof_reached():
+		var line: String = file.get_line().strip_edges()
+		if line.is_empty() or line.begins_with("#"):
+			continue
+		var eq_pos := line.find("=")
+		if eq_pos == -1:
+			continue
+		var key: String = line.substr(0, eq_pos).strip_edges()
+		var value: String = line.substr(eq_pos + 1).strip_edges()
+		# Remove surrounding quotes if present
+		if value.length() >= 2:
+			if (value.begins_with("\"") and value.ends_with("\"")) or \
+			   (value.begins_with("'") and value.ends_with("'")):
+				value = value.substr(1, value.length() - 2)
+		result[key] = value
+	return result
 
 
 ## Create a brain dictionary for an agent with config.
@@ -62,7 +110,7 @@ func _create_brain(agent_id: int, llm_cfg: Dictionary = {}, player_prompt: Strin
 		"request_state": Enums.RequestState.IDLE,
 		"pending_response": "",
 		"api_endpoint": llm_cfg.get("api_endpoint", _default_api_endpoint),
-		"api_key": llm_cfg.get("api_key", ""),
+		"api_key": llm_cfg.get("api_key", _default_api_key),
 		"model": llm_cfg.get("model", _default_model),
 		"api_timeout": llm_cfg.get("api_timeout", _default_api_timeout),
 		"temperature": llm_cfg.get("temperature", _default_temperature),
@@ -338,6 +386,8 @@ func _send_api_request(brain: Dictionary, _tick_count: int) -> void:
 	var headers := [
 		"Content-Type: application/json",
 		"Authorization: Bearer %s" % brain["api_key"],
+		"HTTP-Referer: https://github.com/luyao618/first-to-the-key",
+		"X-Title: First to the Key",
 	]
 	var json_body := JSON.stringify(body)
 	var err := http.request(brain["api_endpoint"], headers, HTTPClient.METHOD_POST, json_body)

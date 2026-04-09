@@ -26,5 +26,13 @@
 	"scene": {
 		"initial_scene": "match",
 		"config_file_path": "res://assets/data/scene_registry.json"
+	},
+	"llm": {
+		"api_endpoint": "https://openrouter.ai/api/v1/chat/completions",
+		"model": "google/gemini-2.0-flash-001",
+		"api_timeout": 15.0,
+		"temperature": 0.3,
+		"max_tokens": 100,
+		"env_key_name": "OPENROUTER_API_KEY"
 	}
 }
