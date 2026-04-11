@@ -33,7 +33,7 @@ var _maze: RefCounted = null
 
 ## Dev mode: skip prompt input and auto-start with default prompts.
 ## Change to false for normal gameplay with prompt input.
-const DEV_SKIP_PROMPTS: bool = true
+const DEV_SKIP_PROMPTS: bool = false
 
 
 func _ready() -> void:

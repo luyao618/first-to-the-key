@@ -20,6 +20,7 @@ var _initial_scene: String = "match"
 
 ## Fallback registry used when config file is missing.
 const FALLBACK_REGISTRY: Dictionary = {
+	"main_menu": "res://scenes/main_menu/MainMenu.tscn",
 	"match": "res://scenes/match/Match.tscn",
 	"result": "res://scenes/result/Result.tscn",
 }

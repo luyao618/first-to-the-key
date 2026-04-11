@@ -1,4 +1,5 @@
 {
+	"main_menu": "res://scenes/main_menu/MainMenu.tscn",
 	"match": "res://scenes/match/Match.tscn",
 	"result": "res://scenes/result/Result.tscn"
 }

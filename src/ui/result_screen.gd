@@ -234,6 +234,11 @@ func _build_center_panel(container: Control, match_result: int, elapsed_time: fl
 	rematch_btn.pressed.connect(_on_rematch_pressed)
 	vbox.add_child(rematch_btn)
 
+	var menu_btn := Button.new()
+	menu_btn.text = "Main Menu"
+	menu_btn.pressed.connect(_on_main_menu_pressed)
+	vbox.add_child(menu_btn)
+
 	var quit_btn := Button.new()
 	quit_btn.text = "Quit"
 	quit_btn.pressed.connect(_on_quit_pressed)
@@ -325,6 +330,11 @@ func _format_number(n: int) -> String:
 func _on_rematch_pressed() -> void:
 	MatchStateManager.reset()
 	SceneManagerGlobal.go_to("match")
+
+
+func _on_main_menu_pressed() -> void:
+	MatchStateManager.reset()
+	SceneManagerGlobal.go_to("main_menu")
 
 
 func _on_quit_pressed() -> void:
