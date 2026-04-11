@@ -1,4 +1,9 @@
 {
+    "mainMenu": {
+        "titleText": "First to the Key",
+        "playButtonText": "Play",
+        "quitButtonText": "Quit"
+    },
     "layout": {
         "panel_ratio": 0.20
     },

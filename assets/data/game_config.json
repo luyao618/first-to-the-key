@@ -24,7 +24,7 @@
 		"max_explored_count": 30
 	},
 	"scene": {
-		"initial_scene": "match",
+		"initial_scene": "main_menu",
 		"config_file_path": "res://assets/data/scene_registry.json"
 	},
 	"llm": {
